@@ -54,6 +54,11 @@ It will generate an error if your HDF5 installation is not in a standard system 
 variable *HDF5_HOME* with the path where the library was installed, or modify the include and library paths in the Makefile
 to avoid the error.
 
-Once the Paraver parser is generated and Python's dependencies satisfied, you are setup to execute *kapitanPOP.py*.
+Once the Paraver parser is generated and Python's dependencies satisfied, you are set up to execute *kapitanPOP.py*.
 
-## Usage
+## Functionalities
+
+- Parsing of Paraver trace files (currently only .prv and .row) into the HDF5 file format.
+- Generation of a CSV file with the available POP metrics from a list of Paraver or parsed HDF5 files.
+
+
