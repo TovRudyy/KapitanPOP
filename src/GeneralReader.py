@@ -116,13 +116,12 @@ def wrapper_prv_parser(file: str, args: Dict) -> str:
     # Inserts original prv trace
     cmd.append(file)
 
-    print(f'Running with: {cmd}')
     returncode = subprocess.run(cmd)
 
     if returncode.returncode == 0:
         return output_file
     else:
-        return None
+        return ''
 
 
 def header_time(header: str) -> int:
@@ -248,7 +247,7 @@ def file_parser(file: str, args: Dict = {}) -> str:
         with open(file, "r") as f:
             header= f.readline()
             if PARAVER_MAGIC_HEADER not in header:
-                print(f'==WARNING== The file {file} is not a vaid Paraver trace.')
+                print(f'==WARNING== The file {file} is not a valid Paraver trace.')
                 return ''
 
             # Parses contents
@@ -275,4 +274,3 @@ def file_parser(file: str, args: Dict = {}) -> str:
     except FileNotFoundError:
         print(f'==ERROR== Could not open the file {file}')
         return ''
-

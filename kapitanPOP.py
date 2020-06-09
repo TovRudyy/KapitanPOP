@@ -10,7 +10,6 @@ import h5py
 import pandas as pd
 import dask
 
-import kapitan_parser
 from src.GeneralReader import file_parser, load, get_num_processes
 from src.Trace import Trace
 from src.CONST import MOD_FACTORS_DOC, MOD_FACTORS_VAL, STATE_COLS, STATE_VALUES
@@ -63,7 +62,7 @@ def get_prv_traces_from_args(cmdl_args) -> List[str]:
     """Filters the given list to extract traces, i.e. matching *.prv.
     Excludes all files other than *.prv.Returns list of trace paths.
     """
-    trace_list = [x for x in cmdl_args.trace_list if (fnmatch.fnmatch(x, '*.prv'))]
+    trace_list = [x for x in cmdl_args.trace_list if (fnmatch.fnmatch(x, '*.prv')) if os.path.exists(x)]
     if not trace_list:
         print(f'==ERROR== Could not find any traces matching {cmdl_args.trace_list}')
         sys.exit(-1)
@@ -86,7 +85,6 @@ def get_traces_from_args(cmdl_args, prv_parser_args: Dict = {}) -> Dict:
             trace_list.remove(trace)
             trace_list.append(file_parser(trace, prv_parser_args))
 
-    print(f'TRACE LIST {trace_list}')
     if not trace_list:
         print(f'==ERROR== Could not find any traces matching {cmdl_args.trace_list}')
         sys.exit(1)
@@ -215,7 +213,7 @@ def get_ideal_data(trace: str, processes: int):
     """Returns ideal runtime and useful computation time."""
     trace_sim = create_ideal_trace(trace, processes)
     if trace_sim:
-        trace_sim = kapitan_parser.load(trace_sim)
+        trace_sim = load(trace_sim)
         df_state = trace_sim.df_state.drop_duplicates()
         df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
         runtime_id = df_state.groupby(STATE_COLS.TASK.value)['el_time'].sum().max().compute() / 1000
@@ -506,11 +504,12 @@ if __name__ == "__main__":
     if cmdl_args.only_parse:
         print(f'==INFO== Only parsing mode.')
         # Gets only prv traces
-        trace_list = get_prv_traces_from_args(cmdl_args, prv_parser_args)
+        trace_list = get_prv_traces_from_args(cmdl_args)
 
         for trace in trace_list:
             result_hdf5 = file_parser(trace, prv_parser_args)
-            print(f'==INFO== Has been generated the file {result_hdf5} of {human_readable(os.path.getsize(result_hdf5))}')
+            if not result_hdf5 == '':
+                print(f'==INFO== Has been generated the file {result_hdf5} of {human_readable(os.path.getsize(result_hdf5))}')
 
     else:
         # Checks if Dimemas is in the path
