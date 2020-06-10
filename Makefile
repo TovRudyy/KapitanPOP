@@ -1,5 +1,5 @@
 CC          = gcc
-CFLAGS      = -fopenmp -O3 -march=native
+CFLAGS      = -O3 -march=native
 LDLIBS      = -lhdf5 -lhdf5_hl
 
 ifneq (${HDF5_HOME},)
