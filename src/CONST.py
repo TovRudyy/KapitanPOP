@@ -51,7 +51,7 @@ MOD_FACTORS_DOC = OrderedDict([('num_processes', 'Number of processes'),
 
 
 class STATE_COLS(Enum):
-    """Columns of STATES"""
+    """Columns of STATES."""
     CPU = "CPUID"
     APP = "APPID"
     TASK = "TaskID"
@@ -62,7 +62,7 @@ class STATE_COLS(Enum):
 
 
 class STATE_VALUES(Enum):
-    """Table of possible State values (Paraver format)"""
+    """Table of possible State values (Paraver format)."""
     IDLE = 0
     RUNNING = 1
     NOT_CREATED = 2
@@ -76,3 +76,18 @@ class STATE_VALUES(Enum):
     RECV_OVERHEAD = 10
     DISK_IO = 11
     DISK_IO_BLOCK = 15
+
+class EVENT_COLS(Enum):
+    """Columns of EVENTS."""
+    CPU = "CPUID"
+    APP = "APPID"
+    TASK = "TaskID"
+    THREAD = "ThreadID"
+    TIME = "Time"
+    EVTYPE = "EventType"
+    EVVAL = "EventValue"
+
+class EVENT_VALUES(Enum):
+    """Table of Event types as in Paraver/Extrae."""
+    PAPI_TOT_INS = 42000050
+    PAPI_TOT_CYC =  42000059

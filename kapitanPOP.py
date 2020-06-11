@@ -8,11 +8,14 @@ from typing import Dict, List
 
 import h5py
 import pandas as pd
+import numpy as np
 import dask
+import dask.dataframe as dd
+import dask.array as da
 
 from src.GeneralReader import file_parser, load, get_num_processes
 from src.Trace import Trace
-from src.CONST import MOD_FACTORS_DOC, MOD_FACTORS_VAL, STATE_COLS, STATE_VALUES
+from src.CONST import MOD_FACTORS_DOC, MOD_FACTORS_VAL, STATE_COLS, STATE_VALUES, EVENT_COLS, EVENT_VALUES
 from src.CONST import __DECIMAL_PRECISION
 
 __author__ = 'Oleksandr Rudyy, Adrián Espejo Saldaña'
@@ -117,8 +120,7 @@ def which(cmd):
 def check_installation(cmdl_args):
     """Checks if Dimemas, Pandas, Dask and h5py are installed and available."""
     if not which('Dimemas'):
-        print('==ERROR== Could not find Dimemas. Please make sure Dimemas is correctly installed and in the path.')
-        sys.exit(1)
+        print('==WARNING== Could not find Dimemas. Please make sure Dimemas is correctly installed and in the path.')
 
     if cmdl_args.debug:
         print(f'==DEBUG== Using {__file__} {__version__}')
@@ -211,15 +213,29 @@ def create_ideal_trace(trace: str, processes: int):
 
 def get_ideal_data(trace: str, processes: int):
     """Returns ideal runtime and useful computation time."""
+    # Creates ideal trace with Dimemas
     trace_sim = create_ideal_trace(trace, processes)
     if trace_sim:
-        trace_sim = load(trace_sim)
+        # Parses the just generated .prv file and loads it
+        trace_sim = load(trace_sim, prv_parser_args)
+
+        # Drops duplicate rows (somehow the generated trace by Dimemas has duplicated rows)
         df_state = trace_sim.df_state.drop_duplicates()
+
+        # Computes the elapse times of each state
         df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
-        runtime_id = df_state.groupby(STATE_COLS.TASK.value)['el_time'].sum().max().compute() / 1000
+
+        # Removes start and end columns from rows cause we don't need them. Load the data into memory.
+        df_state = df_state.drop(columns=[STATE_COLS.START.value, STATE_COLS.END.value]).compute()
+
+        # Computes runtime (in us)
+        runtime_id = df_state.groupby([STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])[
+                      'el_time'].sum().max() / 1000
+
+        # Computes useful ideal max time (in us)
         useful_id = \
-        df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].groupby(STATE_COLS.TASK.value)[
-            'el_time'].sum().max().compute() / 1000
+        df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].groupby([STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])[
+            'el_time'].sum().max() / 1000
 
         return runtime_id, useful_id
 
@@ -227,41 +243,76 @@ def get_ideal_data(trace: str, processes: int):
         return float('NaN'), float('NaN')
 
 
+def is_useful(row, useful_states):
+    appid, taskid, threadid = row.name
+    useful_times = useful_states.loc[(useful_states[STATE_COLS.APP.value] == appid) & (useful_states[STATE_COLS.TASK.value] == taskid) & (useful_states[STATE_COLS.THREAD.value] == threadid)][STATE_COLS.END.value].values
+    useful_rows = row.loc[row[EVENT_COLS.TIME.value].isin(useful_times)]
+    return useful_rows
+    #print(row.loc[row[EVENT_COLS.TIME.value].isin(useful_states)])
+
 def get_raw_data(trace: Trace, cmdl_args):
     """Analyses the trace and computes raw values."""
+    # Retrieves states dataframe with the intresting columns
+    df_state = trace.df_state[[STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.START.value,
+                               STATE_COLS.END.value, STATE_COLS.VAL.value]]
 
-    df_state = trace.df_state
+    # Computes the elapse times of each state
     df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
-    runtime = df_state.groupby(STATE_COLS.TASK.value)['el_time'].sum().max().compute() / 1000
-    df_aux = df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].groupby(STATE_COLS.TASK.value)
-    useful_av = df_aux['el_time'].sum().mean().compute() / 1000
-    useful_max = df_aux['el_time'].sum().max().compute() / 1000
-    useful_tot = df_aux['el_time'].sum().sum().compute() / 1000
 
-    # Dimemas simulation for ideal runtimes
+    # Removes start and end columns from rows cause we don't need them. Load the data into memory.
+    df_state = df_state.drop(columns=[STATE_COLS.START.value, STATE_COLS.END.value]).compute()
+
+    # Computes runtime (in us)
+    runtime = df_state.groupby([STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])['el_time'].sum().max() / 1000
+    # Filters rows by useful and groups dataframe by process
+    df_state_useful_grouped = df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].groupby([STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])
+    # Computes useful average time (in us)
+    useful_av = df_state_useful_grouped['el_time'].sum().mean() / 1000
+    # Computes useful max time (in us)
+    useful_max = df_state_useful_grouped['el_time'].sum().max() / 1000
+    # Computes useful tot time (in us)
+    useful_tot = df_state_useful_grouped['el_time'].sum().sum() / 1000
+
+    # Dimemas simulation for ideal times
     if cmdl_args.dimemas:
         runtime_id, useful_id = get_ideal_data(trace.metadata.path, len(trace.metadata.cpu_list))
     else:
         runtime_id = float('NaN')
         useful_id = float('NaN')
-    # df_event = trace.df_event
-    # df_aux = df_event.loc[df_event['EventType'] == 42000050]
-    # intervals = pd.IntervalIndex.from_arrays(df_state['Time_ini'], df_state['Time_fi'], 'right')
-    # df_aux['state'] = df_state.set_index(intervals).loc[df_aux['Time'], STATE_COLS.VAL.value].values
 
-    # print(f"TASK 1 {df_subset.loc[df_subset['TaskID'] == 1]['EventValue'].sum().compute()}")
-    # df_subset = df_subset[~df_subset['Time'].eq(df_subset['Time'].shift())]
-    # df_subset['State'] = df_subset['Time'].between(0, 1000)
-    # print(df_subset.head())
-    # instr = df_subset['EventValue'].sum().compute()
-    # print(instr)
-    # TODO
-    useful_inst = float('NaN')
-    useful_cyc = float('NaN')
-    ipc = float('NaN')
-    freq = float('NaN')
 
-    return ipc, freq, runtime, runtime_id, useful_av, useful_max, useful_tot, useful_id, useful_inst, useful_cyc
+    # Loads only meaningful columns from df_states and filters useful rows
+    df_state_useful = trace.df_state[[STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.END.value, STATE_COLS.VAL.value]]
+    df_state_useful = df_state_useful.loc[df_state_useful[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].drop(columns=STATE_COLS.VAL.value).compute()
+
+    # Loads only meaningful columns from df_events
+    df_event = trace.df_event[[EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value, EVENT_COLS.TIME.value,
+                                   EVENT_COLS.EVTYPE.value, EVENT_COLS.EVVAL.value]]
+
+    # Filters for PAPI_TOT_INS and set as index the process identifier
+    df_event_ins = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_VALUES.PAPI_TOT_INS.value].drop(columns=EVENT_COLS.EVTYPE.value).compute().set_index([EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value])
+
+    # Gets total useful instructions by grouping and applying a custom filtering function
+    useful_ins = df_event_ins.groupby([EVENT_COLS.APP.value,EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value]).apply(is_useful, useful_states=df_state_useful)[EVENT_COLS.EVVAL.value].sum()
+
+    # Filter for PAPI_TOT_CYC and set as indexes the process identifier
+    df_event_cyc = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_VALUES.PAPI_TOT_CYC.value].drop(columns=EVENT_COLS.EVTYPE.value).compute().set_index([EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value])
+
+    # Gets total useful cycles by grouping and applying a custom filtering function
+    useful_cyc= df_event_cyc.groupby([EVENT_COLS.APP.value,EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value]).apply(is_useful, useful_states=df_state_useful)[EVENT_COLS.EVVAL.value].sum()
+
+    # Computes  average IPC
+    try:
+        ipc = useful_ins / useful_cyc
+    except ValueError:
+        ipc = float('NaN')
+    # Computes average frequency
+    try:
+        freq = useful_cyc / useful_tot / 1000
+    except ValueError:
+        freq = float('NaN')
+
+    return ipc, freq, runtime, runtime_id, useful_av, useful_max, useful_tot, useful_id, useful_ins, useful_cyc
 
 
 def get_scaling_type(df_mfactors: pd.DataFrame, cmdl_args):
@@ -335,6 +386,11 @@ def get_scalabilities(df_mfactors: pd.DataFrame, cmdl_args):
                     MOD_FACTORS_DOC['useful_ins']] * 100
             except ValueError:
                 df_mfactors[MOD_FACTORS_DOC['ins_scale']] = float('NaN')
+            try:
+                df_mfactors[MOD_FACTORS_DOC['speedup']][index] = df_mfactors[MOD_FACTORS_DOC['runtime']][0] / row[
+                    MOD_FACTORS_DOC['runtime']]
+            except ValueError:
+                df_mfactors[MOD_FACTORS_DOC['speedup']] = float('NaN')
 
         elif scaling_type == 'weak':
             lif = row[MOD_FACTORS_DOC['num_processes']] / df_mfactors[MOD_FACTORS_DOC['num_processes']][0]
@@ -348,22 +404,20 @@ def get_scalabilities(df_mfactors: pd.DataFrame, cmdl_args):
                     MOD_FACTORS_DOC['useful_ins']] / lif * 100
             except ValueError:
                 df_mfactors[MOD_FACTORS_DOC['ins_scale']] = float('NaN')
+            try:
+                df_mfactors[MOD_FACTORS_DOC['speedup']][index] = df_mfactors[MOD_FACTORS_DOC['runtime']][0] / row[
+                    MOD_FACTORS_DOC['runtime']] * lif
+            except ValueError:
+                df_mfactors[MOD_FACTORS_DOC['speedup']] = float('NaN')
 
         try:
-            df_mfactors[MOD_FACTORS_DOC['ipc_scale']][index] = df_mfactors[MOD_FACTORS_DOC['ipc']][0] / row[
-                MOD_FACTORS_DOC['ipc']] * 100
+            df_mfactors[MOD_FACTORS_DOC['ipc_scale']][index] = row[MOD_FACTORS_DOC['ipc']] / df_mfactors[MOD_FACTORS_DOC['ipc']][0] * 100
         except ValueError:
             df_mfactors[MOD_FACTORS_DOC['ipc_scale']][index] = float('NaN')
         try:
-            df_mfactors[MOD_FACTORS_DOC['freq_scale']][index] = df_mfactors[MOD_FACTORS_DOC['freq']][0] / row[
-                MOD_FACTORS_DOC['freq']] * 100
+            df_mfactors[MOD_FACTORS_DOC['freq_scale']][index] = row[MOD_FACTORS_DOC['freq']] / df_mfactors[MOD_FACTORS_DOC['freq']][0] * 100
         except ValueError:
             df_mfactors[MOD_FACTORS_DOC['freq_scale']] = float('NaN')
-        try:
-            df_mfactors[MOD_FACTORS_DOC['speedup']][index] = df_mfactors[MOD_FACTORS_DOC['runtime']][0] / row[
-                MOD_FACTORS_DOC['runtime']]
-        except ValueError:
-            df_mfactors[MOD_FACTORS_DOC['speedup']] = float('NaN')
 
         # Now it can compute the global efficiency
         try:

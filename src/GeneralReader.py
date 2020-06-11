@@ -46,12 +46,12 @@ def try_read_hdf5(hdf5_file, key) -> dd.DataFrame:
         return dd.from_array(np.array([[]]))
 
 
-def load(trace_file: str) -> Trace:
+def load(trace_file: str, args: Dict ={}) -> Trace:
     """Reads the trace file provided. It it is a .prv it will parse it before
     loading it to memory."""
     if trace_file[-4:] == ".prv":
         print(f'==INFO== Parsing prv file {trace_file}')
-        trace_hdf5_file = file_parser(trace_file)
+        trace_hdf5_file = file_parser(trace_file, args)
     elif trace_file[-3:] == ".h5":
         trace_hdf5_file = trace_file
     else:
@@ -68,9 +68,9 @@ def load(trace_file: str) -> Trace:
             datetime.strptime(metadata.attrs[HDF5_METADATA_DATE], "%Y-%m-%dT%H:%M:%S"),
             metadata.attrs[HDF5_METADATA_NODES],
             json.loads(metadata.attrs[HDF5_METADATA_APPS]),
-            metadata.attrs[HDF5_METADATA_HWCPU],
-            metadata.attrs[HDF5_METADATA_HWNODES],
-            metadata.attrs[HDF5_METADATA_THREADS]
+            metadata[HDF5_METADATA_HWCPU][0][:].tolist(),
+            metadata[HDF5_METADATA_HWNODES][0][:].tolist(),
+            metadata[HDF5_METADATA_THREADS][0][:].tolist()
         )
     df_states = try_read_hdf5(trace_hdf5_file, key=HDF5_RECORDS + "/" + HDF5_STATES_DF)
     df_events = try_read_hdf5(trace_hdf5_file, key=HDF5_RECORDS + "/" + HDF5_EVENTS_DF)
@@ -86,7 +86,7 @@ def get_num_processes(trace_file: str) -> int:
         cpus = int(open(f'{trace_file[:-4]}.row').readline().rstrip().rstrip().split(' ')[3])
     elif trace_file.endswith('.h5'):
         with h5py.File(trace_file, 'r') as trace:
-            cpus = len(trace[HDF5_ROOT].attrs[HDF5_METADATA_HWCPU])
+            cpus = len(trace[HDF5_ROOT][HDF5_METADATA_HWCPU])
     else:
         print(f'==ERROR== File {trace_file} has not valid extension.')
 
@@ -207,14 +207,18 @@ def row_parser(row_file: str) -> (np.array, np.array, np.array):
             index = next(gen)
             cpu_size = int(lines[index].split()[3])
             cpu_list = lines[index + 1: index + cpu_size + 1]
+            # HDF5 for python only supports string in ASCII code
+            cpu_list = [name.encode("ascii", "ignore") for name in cpu_list]
             gen = (i for i, s in enumerate(lines) if "LEVEL NODE SIZE" in s)
             index = next(gen)
             node_size = int(lines[index].split()[3])
             node_list = lines[index + 1: index + node_size + 1]
+            node_list = [name.encode("ascii", "ignore") for name in node_list]
             gen = (i for i, s in enumerate(lines) if "LEVEL THREAD SIZE" in s)
             index = next(gen)
             thread_size = int(lines[index].split()[3])
             thread_list = lines[index + 1: index + thread_size + 1]
+            thread_list = [name.encode("ascii", "ignore") for name in thread_list]
             return cpu_list, node_list, thread_list
     except FileNotFoundError:
         print(f'==WARNING== Could not access the .row file {row_file}')
@@ -234,9 +238,9 @@ def write_metadata_to_hdf5(hdf5_file: str, trace_metadata: TraceMetaData) -> str
             metadata.attrs[HDF5_METADATA_DATE] = trace_metadata.date_time.isoformat()
             metadata.attrs[HDF5_METADATA_NODES] = trace_metadata.nodes
             metadata.attrs[HDF5_METADATA_APPS] = json.dumps(trace_metadata.apps)
-            metadata.attrs[HDF5_METADATA_HWCPU] = trace_metadata.cpu_list
-            metadata.attrs[HDF5_METADATA_HWNODES] = trace_metadata.node_list
-            metadata.attrs[HDF5_METADATA_THREADS] = trace_metadata.thread_list
+            metadata.create_dataset(HDF5_METADATA_HWCPU, (len(trace_metadata.cpu_list), 1), 'S25', trace_metadata.cpu_list)
+            metadata.create_dataset(HDF5_METADATA_HWNODES, (len(trace_metadata.node_list), 1), 'S25', trace_metadata.node_list)
+            metadata.create_dataset(HDF5_METADATA_THREADS, (len(trace_metadata.thread_list), 1), 'S25', trace_metadata.thread_list)
             return hdf5_file
     except FileNotFoundError:
         return ''
