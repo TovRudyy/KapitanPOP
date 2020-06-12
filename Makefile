@@ -1,24 +1,29 @@
-CC          = gcc
-CFLAGS      = -O3 -march=native
-LDLIBS      = -lhdf5 -lhdf5_hl
+SRCDIR   = src
+OBJDIR   = obj
+BINDIR   = bin
 
-ifneq (${HDF5_HOME},)
-    HDF5_DIR    = $(HDF5_HOME)
-    CFLAGS     += -I$(HDF5_DIR)/include
-    LDFLAGS    += -L$(HDF5_DIR)/lib
-endif
+TARGET   = prv_parser
 
-.PHONY: clean default install
+CC       = gcc
+CFLAGS   = -O3 -march=native -fPIC -shared
 
-default: ./src/prv_parser
+LINKER   = gcc
+LFLAGS   = -lhdf5 -lhdf5_hl
 
-install: ./src/prv_parser
-	mkdir -p ./bin
-	mv ./src/prv_parser ./bin
+SOURCES  := $(wildcard $(SRCDIR)/*.c)
+INCLUDES := $(wildcard $(SRCDIR)/*.h)
+OBJECTS  := $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+rm       = rm -f
 
+
+$(BINDIR)/$(TARGET): $(OBJECTS)
+	@$(LINKER) $(OBJECTS) $(LFLAGS) -o $@
+
+$(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: clean
 clean:
-	$(RM) ./src/prv_parser
+	@$(rm) $(OBJECTS)
+	@$(rm) $(BINDIR)/$(TARGET)
 
-cleanall:
-	$(RM) prv_parser
-	$(RM) -rf ./bin
