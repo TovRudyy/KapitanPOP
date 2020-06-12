@@ -121,18 +121,18 @@ typedef struct comm_row {
 
 /*Column names of the STATES table.*/
 const char *__State_field_names[STATE_RECORD_ELEM] = {"CPUID", "APPID", "TaskID", "ThreadID", "Time_ini", "Time_fi", "State"};
-static hid_t __State_field_type[STATE_RECORD_ELEM];
+hid_t __State_field_type[STATE_RECORD_ELEM];
 static size_t __State_offset[STATE_RECORD_ELEM];
 
 /*Column names of the EVENTS table.*/
 const char *__Event_field_names[EVENT_RECORD_ELEM] = {"CPUID", "APPID", "TaskID", "ThreadID", "Time", "EventType", "EventValue"};
+hid_t __Event_field_type[EVENT_RECORD_ELEM];
 static size_t __Event_offset[EVENT_RECORD_ELEM];
-static hid_t __Event_field_type[EVENT_RECORD_ELEM];
 
 /*Column names of the COMMUNICATIONS table.*/
 const char *__Comm_field_names[COMM_RECORD_ELEM] = {"CPUSendID", "PhyTaskSendID", "LogTaskSendID", "ThreadSendID", "LogSendTime", "PhySendTime", "CPUReceiveID", "PhyTaskReceiveID", "LogTaskReceiveID", "ThreadReceiveID", "LogReceiveTime", "PhyReceiveTime", "Size", "Tag"};
-static hid_t __Comm_field_type[COMM_RECORD_ELEM];
-static size_t __Comm_offset[EVENT_RECORD_ELEM];
+hid_t __Comm_field_type[COMM_RECORD_ELEM];
+size_t __Comm_offset[EVENT_RECORD_ELEM];
 
 /*Checks what kind of records identifies the character.*/
 recordTypes_enum get_record_type(char *line) {
@@ -454,12 +454,9 @@ void create_HDF5tables(const hid_t loc_id, record_Array state, record_Array even
     if (comm.elements > __MaxHDF5ChunkSize/2) chunk_comm = __MaxHDF5ChunkSize/2;
     else if (comm.elements < __MinHDF5ChunkSize/2) chunk_comm = __MinHDF5ChunkSize/2;
     else chunk_comm = comm.elements;
-   printf("CHUNK SIZE STATE: %lld, EVENT: %lld, COMMS: %lld\n", chunk_state, chunk_event, chunk_comm);
-printf("state elem: %d, state sizeof %d\n", state.elements, sizeof(state_row));
     // Creates tables
     H5TBmake_table("State records", loc_id, STATE_DATASET_NAME, STATE_RECORD_ELEM, state.elements, sizeof(state_row), __State_field_names, __State_offset, __State_field_type, chunk_state, NULL, __CompressionLevel, (state_row *) state.array);
     H5TBmake_table("Event records", loc_id, EVENT_DATASET_NAME, EVENT_RECORD_ELEM, event.elements, sizeof(event_row), __Event_field_names, __Event_offset, __Event_field_type, chunk_event, NULL, __CompressionLevel, (event_row *) event.array);
-
     H5TBmake_table("Communication records", loc_id, COMM_DATASET_NAME, COMM_RECORD_ELEM, comm.elements, sizeof(comm_row), __Comm_field_names, __Comm_offset, __Comm_field_type, chunk_comm, NULL, __CompressionLevel, (comm_row *) comm.array);
     #ifdef PROFILING
     REGISTER_TIME(&end);
@@ -579,7 +576,7 @@ void init() {
     __State_offset[4] = HOFFSET( state_row, time_ini ); 
     __State_offset[5] = HOFFSET( state_row, time_fi ); 
     __State_offset[6] = HOFFSET( state_row, state );
-printf("%d %d %d %d %d %d %d\n", __State_offset[0],__State_offset[1], __State_offset[2], __State_offset[3],__State_offset[4],__State_offset[5], __State_offset[6]);
+    
     __Event_field_type[0] = H5T_NATIVE_UINT;
     __Event_field_type[1] = H5T_NATIVE_USHORT; 
     __Event_field_type[2] = H5T_NATIVE_UINT; 
@@ -595,7 +592,6 @@ printf("%d %d %d %d %d %d %d\n", __State_offset[0],__State_offset[1], __State_of
     __Event_offset[5] = HOFFSET( event_row, event_t ); 
     __Event_offset[6] = HOFFSET( event_row, event_v );
 
-printf("UINT: %d, USHORT: %d, ULLONG: %d\n", __Event_offset[1], __Event_offset[2], __Event_offset[3]);
     __Comm_field_type[0] = H5T_NATIVE_UINT;
     __Comm_field_type[1] = H5T_NATIVE_UINT; 
     __Comm_field_type[2] = H5T_NATIVE_UINT; 
