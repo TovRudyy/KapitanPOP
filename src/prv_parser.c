@@ -408,7 +408,8 @@ size_t read_and_preprocess( const char *file, const size_t MaxBytesRead, const s
     file_d->counter_comms = counter_comms;
     file_d->counter_unknowns = counter_unknowns;
     size_t total_elements = counter_states + counter_events + counter_comms + counter_unknowns;
-    for (size_t o = 0; o < total_elements; o++) 
+    size_t o;
+    for (o = 0; o < total_elements; o++)
     // Reallocs file_structure size to minimize memory consumption
     file_d->lengths = realloc(file_d->lengths, total_elements*sizeof(uint16_t));
     file_d->types = realloc(file_d->types, total_elements*sizeof(int8_t));
@@ -544,7 +545,8 @@ void parse_prv_to_hdf5(const char * prv_file, const char * hdf5_file) {
             first = FALSE;
         }
         else extend_HDF5tables(record_group_id, records[0], records[1], records[2]);
-        for (size_t i = 0; i < 3; i++) {
+        size_t i;
+        for (i = 0; i < 3; i++) {
             free(records[i].array);
         }
 
