@@ -248,33 +248,34 @@ def write_metadata_to_hdf5(hdf5_file: str, trace_metadata: TraceMetaData) -> str
 
 def file_parser(file: str, args: Dict = {}) -> str:
     try:
-        with open(file, "r") as f:
-            header= f.readline()
-            if PARAVER_MAGIC_HEADER not in header:
-                print(f'==WARNING== The file {file} is not a valid Paraver trace.')
-                return ''
-
-            # Parses contents
-            hdf5_file = wrapper_prv_parser(file, args)
-
-            # Parses straightforward metadata
-            trace_name = os.path.basename(f.name)
-            trace_path = os.path.abspath(f.name)
-            trace_type = PARAVER_FILE
-            # Parses header's metadata
-            trace_exec_time, trace_date, trace_nodes, trace_apps = header_parser(header)
-            # Parses .row's file metadata
-            row_file = file[:-4] + '.row'
-            cpu_list, node_list, thread_list = row_parser(row_file)
-            trace_metadata = TraceMetaData(
-                trace_name, trace_path, trace_type, trace_exec_time, trace_date, trace_nodes, trace_apps, cpu_list,
-                node_list, thread_list
-            )
-
-            result = write_metadata_to_hdf5(hdf5_file, trace_metadata)
-
-            return result;
-
+        f = open(file, 'r')
     except FileNotFoundError:
         print(f'==ERROR== Could not open the file {file}')
         return ''
+
+    header= f.readline()
+    if PARAVER_MAGIC_HEADER not in header:
+        print(f'==WARNING== The file {file} is not a valid Paraver trace.')
+        return ''
+
+    # Parses contents
+    hdf5_file = wrapper_prv_parser(file, args)
+
+    # Parses straightforward metadata
+    trace_name = os.path.basename(f.name)
+    trace_path = os.path.abspath(f.name)
+    trace_type = PARAVER_FILE
+    # Parses header's metadata
+    trace_exec_time, trace_date, trace_nodes, trace_apps = header_parser(header)
+    # Parses .row's file metadata
+    row_file = file[:-4] + '.row'
+    cpu_list, node_list, thread_list = row_parser(row_file)
+    trace_metadata = TraceMetaData(
+        trace_name, trace_path, trace_type, trace_exec_time, trace_date, trace_nodes, trace_apps, cpu_list,
+        node_list, thread_list
+    )
+
+    result = write_metadata_to_hdf5(hdf5_file, trace_metadata)
+    f.close()
+
+    return result;
