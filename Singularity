@@ -1,6 +1,9 @@
 Bootstrap: docker
 From: ubuntu:20.04
 
+%labels
+MAINTAINER TovRudyy
+
 %setup
     mkdir -p ${SINGULARITY_ROOTFS}/opt
 
@@ -8,7 +11,7 @@ From: ubuntu:20.04
     KAPITANPOP_HOME=/opt/KapitanPOP
     HDF5_HOME=/opt/hdf5-hdf5-1_12_0/install
     DASK_HOME=/opt/dask-2.18.1
-    PATH=$PATH:/opt/KapitanPOP:/opt/KapitanPOP/bin
+    PATH=/opt/KapitanPOP:/opt/KapitanPOP/bin:/opt/dimemas-5.4.2-Linux_x86_64/bin:$PATH
 
 %post
     # Basic OS packages
@@ -31,6 +34,10 @@ From: ubuntu:20.04
     cd dask
     DASK_HOME=/opt/dask
     python -m pip install ".[complete]"
+
+    # Download & install Dimemas
+    cd /opt && wget -nv https://ftp.tools.bsc.es/dimemas/dimemas-5.4.2-Linux_x86_64.tar.bz2
+    tar -xvf dimemas-5.4.2-Linux_x86_64.tar.bz2
 
     # Download & install KapitanPOP
     cd /opt && git clone https://github.com/TovRudyy/KapitanPOP.git
