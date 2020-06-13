@@ -29,7 +29,7 @@ Before using KapitanPOP you will need to install some dependencies and compile a
 * [Numpy](https://numpy.org/) - Package for scientific computing in Python
 * [Dask](https://dask.org/) the version from [GitHub's](https://github.com/dask/dask) master branch - Parallel computing library for Python
 * [H5py](https://www.h5py.org/) - HDF5 for Python
-* [PyTables](https://www.pytables.org/) Package used by Dask to manage datasets from HDF5 files
+* [PyTables](https://www.pytables.org/) - Package used by Dask to manage datasets from HDF5 files
 * [Dimemas](https://tools.bsc.es/downloads) - Network simulator tool for message-passing programs
 
 You should be able to install **Pandas**, **Numpy**, **h5py** and **PyTables** on your computer very easyly using **pip install**, for example.
