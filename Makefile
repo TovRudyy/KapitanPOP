@@ -8,7 +8,13 @@ CC       = gcc
 CFLAGS   = -O3 -march=native -fPIC -shared
 
 LINKER   = gcc
-LFLAGS   = -lhdf5 -lhdf5_hl
+LDFLAGS   = -lhdf5 -lhdf5_hl
+
+ifneq (${HDF5_HOME},)
+	HDF5_DIR	= $(HDF5_HOME)
+	CFLAGS	+= -I$(HDF5_DIR)/include
+	LDFLAGS	+= -L$(HDF5_DIR)/lib
+endif
 
 SOURCES  := $(wildcard $(SRCDIR)/*.c)
 INCLUDES := $(wildcard $(SRCDIR)/*.h)
@@ -17,10 +23,10 @@ rm       = rm -f
 
 
 $(BINDIR)/$(TARGET): $(OBJECTS)
-	@$(LINKER) $(OBJECTS) $(LFLAGS) -o $@
+	@$(LINKER) $(OBJECTS) $(LDFLAGS) -o $@
 
 $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
-	@$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS)  -c $< -o $@
 
 .PHONY: clean
 clean:
