@@ -29,16 +29,21 @@ Before using KapitanPOP you will need to install some dependencies and compile a
 * [Numpy](https://numpy.org/) - Package for scientific computing in Python
 * [Dask](https://dask.org/) the version from [GitHub's](https://github.com/dask/dask) master branch - Parallel computing library for Python
 * [H5py](https://www.h5py.org/) - HDF5 for Python
+* [PyTables](https://www.pytables.org/) Package used by Dask to manage datasets from HDF5 files
 * [Dimemas](https://tools.bsc.es/downloads) - Network simulator tool for message-passing programs
 
-You should be able to install **Pandas**, **Numpy** and **h5py** on your computer very easyly using **pip install**, for example.
+You should be able to install **Pandas**, **Numpy**, **h5py** and **PyTables** on your computer very easyly using **pip install**, for example.
 ```
-pip install pandas numpy h5py
+pip install pandas numpy h5py tables
+```
+or, more easily
+```
+pip install -r requirements.txt
 ```
 To install **HDF5-1.12.0** the best approach is to download the [sources](https://portal.hdfgroup.org/display/support/HDF5+1.12.0) 
 and install them on your computer:
 
-For **Dask** it is advisable to install it from source from its master branch on [GitHub](https://github.com/dask/dask) 
+For **Dask** you must install it from source from its master branch on [GitHub](https://github.com/dask/dask) 
 because the latest releases have some issues related to HDF5.
 
 **Dimemas** is not a key dependency. You can run KapitanPOP without it, but you will miss some performance metrics 
