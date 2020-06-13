@@ -13,7 +13,7 @@ LDFLAGS   = -lhdf5 -lhdf5_hl
 ifneq (${HDF5_HOME},)
 	HDF5_DIR	= $(HDF5_HOME)
 	CFLAGS	+= -I$(HDF5_DIR)/include
-	LDFLAGS	+= -L$(HDF5_DIR)/lib
+	LDFLAGS	+= -L$(HDF5_DIR)/lib -Wl,-rpath=$(HDF5_DIR)/lib
 endif
 
 SOURCES  := $(wildcard $(SRCDIR)/*.c)
