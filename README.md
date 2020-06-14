@@ -70,7 +70,7 @@ $make
 KapitanPOP can read data from .row and .prv files and write it into an equivalent HDF5 file. For this, a little C program to parse .prv files is used. The resulting HDF5 file contains all the data of the original Paraver file, but in a tabular format divided in dataframes of States, Events and communications. The resulting HDF5 contains an equivalent version of the .row and .prv data in a more convenient way for fast I/O.
 
 
-### Metrics computation of te multiplicative POP model
+### Metrics computation of the multiplicative POP model
 
 KapitanPOP can generate an identic CSV file as the original modelfactors with POP metrics of te multiplicative model:
 
