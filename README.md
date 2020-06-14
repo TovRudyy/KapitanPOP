@@ -4,9 +4,9 @@ Refractor of BSC's performance analysis tools to generate fundamental POP metric
 
 ## Description
 
-KapitanPOP is an effort to refractor and enchance BSC's performance analysis tools (Paraver, Dimemas, BasicAnalysis) in order to leverage present technologies. With the usage of nowaday's libraries for fast I/O, data analysis and distributed programming KapitanPOP offers the same funcionalities as BSC's Basic Analysis framework, but in a scalable wayt with better performances and less memory consumption. 
+KapitanPOP is an effort to refractor and enchance BSC's performance analysis tools (Paraver, Dimemas, BasicAnalysis) in order to leverage present technologies. With the usage of nowaday's libraries for fast I/O, data analysis and distributed programming KapitanPOP offers the same funcionalities as BSC's Basic Analysis framework, but in a scalable way with better performances and less memory consumption. 
 
-KaptainPOP has 2 ultimate goals: to ease the work of HPC application performance analysts within the POP project, enabling faster efficiency metrics obtention , and the proof-of-concept of promising libraries and technologies for the sake of trace analysis, which in the end is nothing else than pure data analysis. 
+KaptainPOP has 2 ultimate goals: to ease the work of HPC application performance analysts within the POP project, enabling faster efficiency metrics processing, and the proof-of-concept of promising libraries and technologies for the sake of trace analysis, which in the end is nothing else than pure data analysis. 
 
 ## Installation
 
@@ -37,7 +37,7 @@ First of all, you will have to install the next dependencies:
 * [PyTables](https://www.pytables.org/) - Package used by Dask to manage datasets from HDF5 files
 * [Dimemas](https://tools.bsc.es/downloads) (optional) - Network simulator tool for message-passing programs
 
-You should be able to install **Pandas**, **Numpy**, **h5py** and **PyTables** on your computer very easyly using **pip install**, for example:
+You should be able to install **Pandas**, **Numpy**, **h5py** and **PyTables** on your computer very easily using **pip install**, for example:
 ```
 $pip install pandas numpy h5py tables
 ```
@@ -48,12 +48,12 @@ $pip install -r requirements.txt
 To install **HDF5-1.12.0** the best approach is to download the [sources](https://portal.hdfgroup.org/display/support/HDF5+1.12.0) and install them on your computer.
 
 For **Dask** you must install it from source from its master branch on [GitHub](https://github.com/dask/dask) 
-because the latest releases have some issues related to HDF5.
+because the official releases have some issues related to HDF5.
 
 **Dimemas** is not a key dependency. You can run KapitanPOP without it, but you will miss some performance metrics 
 (transfer and serialization efficiency).
 
-After the dependencies are satisfied, you can install KapitanPOP. You might need to modify the Makefile if your HDF5 libraries are not installed in a standard system path. 
+Once dependencies are satisfied, you can install KapitanPOP. You might need to modify the Makefile if your HDF5 libraries are not installed in a standard system path. 
 
 ```
 $git clone https://github.com/TovRudyy/KapitanPOP.git
@@ -67,7 +67,7 @@ $make
 
 ### Parsing of Paraver trace files into HDF5 file format
 
-KapitanPOP can read data from .row and .prv files and write it into an equivalent HDF5 file. For this, a little C program to parse .prv files is used. The resulting HDF5 file contains all the data of the original Paraver file, but in a tabular format divided in dataframes of States, Events and communications. The resulting HDF5 contains an equivalent version of the .row and .prv data in a more convenient way for fast I/O.
+KapitanPOP can read data from .row and .prv files and write it into an equivalent HDF5 file. For this, a little C program to parse .prv files is used. The resulting HDF5 file contains all the data of the original Paraver file, but in a tabular format divided in dataframes of States, Events and Communications. The resulting HDF5 contains an equivalent version of the .row and .prv data in a more convenient way for fast I/O.
 
 
 ### Metrics computation of the multiplicative POP model
@@ -98,13 +98,13 @@ And the data where those metrics come from:
 
 ## Usage
 
-A quick help is available running: ```$./kapitanPOP.py --help```
+A quick help is available running ```$./kapitanPOP.py --help```
 
-To generate a modelfactors.csv file with POP metrics: ```$./kapitanPOP.py trace1.prv trace2.prv trace3.prv ...``` 
+To generate a modelfactors.csv file with POP metrics ```$./kapitanPOP.py trace1.prv trace2.prv trace3.prv ...``` 
 
-It also accepts regex expressions. By default it will not simulate the application execution on an ideal network. To enable the compute of ideal performance metrics (transfer & serialization efficiency) you will have to add the ```--dim``` option flag: ```$./kapitanPOP.py --dim trace...```
+It also accepts regex expressions. By default it will not simulate the application execution on an ideal network. To enable the compute of ideal performance metrics (transfer & serialization efficiency) you will have to add the ```--dim``` option flag ```$./kapitanPOP.py --dim trace...```
 
-To only parse a Paraver trace (.row and .prv files) into an equivalent HDF5 file: ```$./kapintanPOP.py -p trace.prv```
+To only parse a Paraver trace (.row and .prv files) into an equivalent HDF5 file ```$./kapintanPOP.py -p trace.prv```
 
 You can tune how the parser performs in order to limit the maximum memory and disk usage. By default, the parser process the .prv file in chunks of 1GB and does not apply compression to the resuling HDF5. You can can change those setting with ```--chunk_size``` and ```--comp_lvl``` option flags. 
 
@@ -117,3 +117,6 @@ You can tune how the parser performs in order to limit the maximum memory and di
 * Improve execution times and memory usage when analysing traces (kapitanPOP.py)
 * Benchmark KapitanPOP
 * Proof-of-concept running KapitanPOP using multiples nodes through Dask
+
+## Disclaimer
+KapitanPOP is at the moment in a continuous developing & testing phase, therefore you should use it on your own responsibility. You might encounter bugs, wrong results and cases where the software crashes or, in the worst cases, devours your entire memory and does not finish. If, unfortunately, you experience any problem mentioned above, you are welcome to open an issue or send an email to oleksandr.rudyy@hlrs.de describing your finding. 
