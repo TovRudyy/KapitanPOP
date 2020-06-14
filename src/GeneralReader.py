@@ -68,14 +68,13 @@ def load(trace_file: str, args: Dict ={}) -> Trace:
             datetime.strptime(metadata.attrs[HDF5_METADATA_DATE], "%Y-%m-%dT%H:%M:%S"),
             metadata.attrs[HDF5_METADATA_NODES],
             json.loads(metadata.attrs[HDF5_METADATA_APPS]),
-            metadata[HDF5_METADATA_HWCPU][0][:].tolist(),
-            metadata[HDF5_METADATA_HWNODES][0][:].tolist(),
-            metadata[HDF5_METADATA_THREADS][0][:].tolist()
+            metadata[HDF5_METADATA_HWCPU][:].tolist(),
+            metadata[HDF5_METADATA_HWNODES][:].tolist(),
+            metadata[HDF5_METADATA_THREADS][:].tolist()
         )
     df_states = try_read_hdf5(trace_hdf5_file, key=HDF5_RECORDS + "/" + HDF5_STATES_DF)
     df_events = try_read_hdf5(trace_hdf5_file, key=HDF5_RECORDS + "/" + HDF5_EVENTS_DF)
     df_comms = try_read_hdf5(trace_hdf5_file, key=HDF5_RECORDS + "/" + HDF5_COMMS_DF)
-
     return Trace(trace_metadata, df_states, df_events, df_comms)
 
 def get_num_processes(trace_file: str) -> int:
@@ -86,10 +85,9 @@ def get_num_processes(trace_file: str) -> int:
         cpus = int(open(f'{trace_file[:-4]}.row').readline().rstrip().rstrip().split(' ')[3])
     elif trace_file.endswith('.h5'):
         with h5py.File(trace_file, 'r') as trace:
-            cpus = len(trace[HDF5_ROOT][HDF5_METADATA_HWCPU])
+            cpus = len(trace[HDF5_ROOT][HDF5_METADATA_HWCPU][:].tolist())
     else:
         print(f'==ERROR== File {trace_file} has not valid extension.')
-
     return cpus
 
 

@@ -223,7 +223,7 @@ def get_ideal_data(trace: str, processes: int):
         # Drops duplicate rows (somehow the generated trace by Dimemas has duplicated rows)
         df_state = trace_sim.df_state.drop_duplicates()
 
-        # Computes the elapse times of each state
+        # Computes elapsed time of each state
         df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
 
         # Removes start and end columns from rows cause we don't need them. Load the data into memory.
@@ -249,15 +249,14 @@ def is_useful(row, useful_states):
     useful_times = useful_states.loc[(useful_states[STATE_COLS.APP.value] == appid) & (useful_states[STATE_COLS.TASK.value] == taskid) & (useful_states[STATE_COLS.THREAD.value] == threadid)][STATE_COLS.END.value].values
     useful_rows = row.loc[row[EVENT_COLS.TIME.value].isin(useful_times)]
     return useful_rows
-    #print(row.loc[row[EVENT_COLS.TIME.value].isin(useful_states)])
 
 def get_raw_data(trace: Trace, cmdl_args):
     """Analyses the trace and computes raw values."""
-    # Retrieves states dataframe with the intresting columns
+    # Retrieves states dataframe with the interesting columns
     df_state = trace.df_state[[STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.START.value,
                                STATE_COLS.END.value, STATE_COLS.VAL.value]]
 
-    # Computes the elapse times of each state
+    # Computes elapsed time of each state
     df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
 
     # Removes start and end columns from rows cause we don't need them. Load the data into memory.
@@ -329,7 +328,7 @@ def get_scaling_type(df_mfactors: pd.DataFrame, cmdl_args):
     eps = 0.9
     normalized_inst_ratio = 0
 
-    # Check if there is only one trace
+    # Checks if there is only one trace
     if len(df_mfactors.index) == 1:
         return 'strong'
 
@@ -339,10 +338,8 @@ def get_scaling_type(df_mfactors: pd.DataFrame, cmdl_args):
             df_mfactors[MOD_FACTORS_DOC['num_processes']][0])
         normalized_inst_ratio += inst_ratio / proc_ratio
 
-    # Get the average inst increase. Ignore ratio of first trace (1.0)
+    # Gets the average inst increase. Ignores ratio of first trace (1.0)
     normalized_inst_ratio = (normalized_inst_ratio - 1) / (len(df_mfactors.index) - 1)
-
-    scaling_computed = ''
 
     if normalized_inst_ratio > eps:
         scaling_computed = 'weak'
@@ -430,7 +427,7 @@ def get_scalabilities(df_mfactors: pd.DataFrame, cmdl_args):
     return df_mfactors
 
 
-def get_efficiencies(runtime, runtime_id, useful_av, useful_max, useful_id, comp_scale):
+def get_efficiencies(runtime, runtime_id, useful_av, useful_max, useful_id):
     """Computes efficiencies."""
     try:
         load_balance = useful_av / useful_max * 100
@@ -506,8 +503,7 @@ def modelfactors(trace_files: List[str], trace_processes: Dict):
             MOD_FACTORS_VAL['runtime_id'],
             MOD_FACTORS_VAL['useful_av'],
             MOD_FACTORS_VAL['useful_max'],
-            MOD_FACTORS_VAL['useful_id'],
-            MOD_FACTORS_VAL['comp_scale'])
+            MOD_FACTORS_VAL['useful_id'])
 
         MOD_FACTORS_VAL['parallel_eff'] = parallel_eff
         MOD_FACTORS_VAL['load_balance'] = load_balance
@@ -575,5 +571,6 @@ if __name__ == "__main__":
 
         # Analyses traces
         df_mfactors = modelfactors(trace_list, trace_processes)
+
         # Generates the output file
         print_mod_factors_csv(df_mfactors)
