@@ -39,11 +39,11 @@ First of all, you will have to install the next dependencies:
 
 You should be able to install **Pandas**, **Numpy**, **h5py** and **PyTables** on your computer very easyly using **pip install**, for example:
 ```
-pip install pandas numpy h5py tables
+$pip install pandas numpy h5py tables
 ```
 or easier:
 ```
-pip install -r requirements.txt
+$pip install -r requirements.txt
 ```
 To install **HDF5-1.12.0** the best approach is to download the [sources](https://portal.hdfgroup.org/display/support/HDF5+1.12.0) and install them on your computer.
 
@@ -57,9 +57,9 @@ After the dependencies are satisfied, you can install KapitanPOP. You might need
 
 ```
 $git clone https://github.com/TovRudyy/KapitanPOP.git
-cd KapitanPOP
-mkdir -p obj bin
-make
+$cd KapitanPOP
+$mkdir -p obj bin
+$make
 ```
 **IMPORTANT**: KapitanPOP does not work with gcc10.
 
@@ -98,13 +98,13 @@ And the data where those metrics come from:
 
 ## Usage
 
-A quick help is available running: ```./kapitanPOP.py --help```
+A quick help is available running: ```$./kapitanPOP.py --help```
 
-To generate a modelfactors.csv file with POP metrics: ```./kapitanPOP.py trace1.prv trace2.prv trace3.prv ...``` 
+To generate a modelfactors.csv file with POP metrics: ```$./kapitanPOP.py trace1.prv trace2.prv trace3.prv ...``` 
 
-It also accepts regex expressions. By default it will not simulate the application execution on an ideal network. To enable the compute of ideal performance metrics (transfer & serialization efficiency) you will have to add the ```--dim``` option flag: ```/kapitanPOP.py --dim trace...```
+It also accepts regex expressions. By default it will not simulate the application execution on an ideal network. To enable the compute of ideal performance metrics (transfer & serialization efficiency) you will have to add the ```--dim``` option flag: ```$./kapitanPOP.py --dim trace...```
 
-To only parse a Paraver trace (.row and .prv files) into an equivalent HDF5 file: ```./kapintanPOP.py -p trace.prv```
+To only parse a Paraver trace (.row and .prv files) into an equivalent HDF5 file: ```$./kapintanPOP.py -p trace.prv```
 
 You can tune how the parser performs in order to limit the maximum memory and disk usage. By default, the parser process the .prv file in chunks of 1GB and does not apply compression to the resuling HDF5. You can can change those setting with ```--chunk_size``` and ```--comp_lvl``` option flags. 
 
