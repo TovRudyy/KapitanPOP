@@ -119,4 +119,4 @@ You can tune how the parser performs in order to limit the maximum memory and di
 * Proof-of-concept running KapitanPOP using multiples nodes through Dask
 
 ## Disclaimer
-KapitanPOP is at the moment in a continuous developing & testing phase, therefore you should use it on your own responsibility. You might encounter bugs, wrong results and situations where the software crashes or, in the worst cases, devours your entire memory and never finishes. If you experience any problem with the software, you are welcome to open an issue or send an email to oleksandr.rudyy@hlrs.de describing your finding. 
+KapitanPOP is at the moment in a continuous developing & testing phase, therefore you should use it on your own responsibility. You might encounter bugs, wrong results and situations where the software crashes or, in the worst cases, devours your entire memory and never finishes. If you experience any problem with the software, you are welcome to open an issue or send an email to oleksandr.rudyy[at]hlrs.de describing your finding. 
