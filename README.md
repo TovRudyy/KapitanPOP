@@ -10,7 +10,7 @@ KaptainPOP has 2 ultimate goals: to ease the work of HPC application performance
 
 ## Installation
 
-You can install KapitanPOP in two ways: using Singularity containers and downloading KapitanPOP's image from the cloud; or manual installation. I strongly recommend using KapitanPOP through Singularity containers because installing manually the dependencies can be frustrating. 
+You can install KapitanPOP in two ways: using Singularity containers and downloading KapitanPOP's image from the cloud; or manual installation. I strongly recommend using KapitanPOP through Singularity containers because installing manually dependencies can be frustrating. 
 
 ### Through Singularity
 
