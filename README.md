@@ -12,7 +12,7 @@ KaptainPOP has 2 ultimate goals: to ease the work of HPC application performance
 
 You can install KapitanPOP in two ways: using Singularity containers and downloading KapitanPOP's image from the cloud; or manual installation. I strongly recommend using KapitanPOP through Singularity containers because installing manually dependencies can be frustrating. 
 
-### Through Singularity
+### Singularity
 
 After installing Singularity containers on your computer you only have to pull KapitanPOP's image from its Singularity Hub repository and run it.
 ```
@@ -25,7 +25,7 @@ You can also build the image directly on your computer using the available [Sing
 $sudo singularity build KapitanPOP.sif Singularity
 ```
 
-### Through manual installation
+### Manual installation
 
 First of all, you will have to install the next dependencies:
 
