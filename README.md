@@ -41,7 +41,7 @@ You should be able to install **Pandas**, **Numpy**, **h5py** and **PyTables** o
 ```
 pip install pandas numpy h5py tables
 ```
-or, more easily:
+or easier:
 ```
 pip install -r requirements.txt
 ```
