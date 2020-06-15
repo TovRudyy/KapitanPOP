@@ -50,7 +50,7 @@ uint8_t __Verbose = 0;
 long long __ReadSize = DEF_READ_SIZE;
 long long __MaxHDF5ChunkSize = DEF_MAX_HDF5_CHUNK_SIZE;
 long long __MinHDF5ChunkSize = DEF_MIN_HDF5_CHUNK_SIZE;
-long long __ExtendEventCapacity = DEF_EXTEND_EVENT_CAPACITY;
+unsigned int __ExtendEventCapacity = DEF_EXTEND_EVENT_CAPACITY;
 int __CompressionLevel = DEF_COMPRESSION_LEVEL;
 
 typedef enum {
