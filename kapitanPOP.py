@@ -415,12 +415,12 @@ def get_scalabilities(df_mfactors: pd.DataFrame, cmdl_args):
             lif = row[MOD_FACTORS_DOC['num_processes']] / df_mfactors[MOD_FACTORS_DOC['num_processes']][0]
             try:
                 df_mfactors[MOD_FACTORS_DOC['comp_scale']][index] = df_mfactors[MOD_FACTORS_DOC['useful_tot']][0] / row[
-                    MOD_FACTORS_DOC['useful_tot']] / lif * 100
+                    MOD_FACTORS_DOC['useful_tot']] * lif * 100
             except ValueError:
                 df_mfactors[MOD_FACTORS_DOC['comp_scale']][index] = float('NaN')
             try:
                 df_mfactors[MOD_FACTORS_DOC['ins_scale']][index] = df_mfactors[MOD_FACTORS_DOC['useful_ins']][0] / row[
-                    MOD_FACTORS_DOC['useful_ins']] / lif * 100
+                    MOD_FACTORS_DOC['useful_ins']] * lif * 100
             except ValueError:
                 df_mfactors[MOD_FACTORS_DOC['ins_scale']] = float('NaN')
             try:
