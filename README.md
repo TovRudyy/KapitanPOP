@@ -1,10 +1,10 @@
 # KapitanPOP
 
-Refractor of BSC's performance analysis tools to generate fundamental POP metrics.
+Refactor of BSC's performance analysis tools to generate fundamental POP metrics.
 
 ## Description
 
-KapitanPOP is an effort to refractor and enchance BSC's performance analysis tools (Paraver, Dimemas, BasicAnalysis) in order to leverage present technologies. With the usage of nowaday's libraries for fast I/O, data analysis and distributed programming KapitanPOP offers the same funcionalities as BSC's Basic Analysis framework, but in a scalable way with better performances and less memory consumption. 
+KapitanPOP is an effort to refactor and enchance BSC's performance analysis tools (Paraver, Dimemas, BasicAnalysis) in order to leverage present technologies. With the usage of nowaday's libraries for fast I/O, data analysis and distributed programming KapitanPOP offers the same funcionalities as BSC's Basic Analysis framework, but in a scalable way with better performances and less memory consumption. 
 
 KaptainPOP has 2 ultimate goals: to ease the work of HPC application performance analysts within the POP project, enabling faster efficiency metrics processing, and the proof-of-concept of promising libraries and technologies for the sake of trace analysis, which in the end is nothing else than pure data analysis. 
 
@@ -117,6 +117,7 @@ You can tune how the parser performs in order to limit the maximum memory and di
 * Improve execution times and memory usage when analysing traces (kapitanPOP.py)
 * Benchmark KapitanPOP
 * Proof-of-concept running KapitanPOP using multiples nodes through Dask
+* Refactor Dimemas simulator
 
 ## Disclaimer
 KapitanPOP is at the moment in a continuous developing & testing phase, therefore you should use it on your own responsibility. You might encounter bugs, wrong results and situations where the software crashes or, in the worst cases, devours your entire memory and never finishes. If you experience any problem with the software, you are welcome to open an issue or send an email to oleksandr.rudyy[at]hlrs.de describing your finding. 
