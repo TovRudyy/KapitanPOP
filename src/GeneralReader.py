@@ -123,10 +123,10 @@ def wrapper_prv_parser(file: str, args: Dict) -> str:
 
 
 def header_time(header: str) -> int:
-    """Returns total execution time (us) contained in the header."""
+    """Returns total execution time (ns) contained in the header."""
     try:
         time_ns, _, other = header[header.find("):") + 2:].partition("_ns")  # Originally it's in ns
-        time = int(time_ns) // 1000
+        time = int(time_ns)
     except ValueError:
         print(f'==WARNING== Could not parse the time of the header.')
         time = 0
