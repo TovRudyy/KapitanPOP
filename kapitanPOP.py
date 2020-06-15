@@ -84,11 +84,6 @@ def get_traces_from_args(cmdl_args, prv_parser_args: Dict = {}) -> Dict:
     trace_list = [x for x in cmdl_args.trace_list if (fnmatch.fnmatch(x, '*.prv') or fnmatch.fnmatch(x, '*.h5')) if
                   not (fnmatch.fnmatch(x, '*.sim.prv') or fnmatch.fnmatch(x, '*.sim.h5')) if os.path.exists(x)]
 
-    for trace in trace_list:
-        if trace.endswith('.prv'):
-            trace_list.remove(trace)
-            trace_list.append(file_parser(trace, prv_parser_args))
-
     if not trace_list:
         print(f'==ERROR== Could not find any traces matching {cmdl_args.trace_list}')
         sys.exit(1)
@@ -214,9 +209,17 @@ def create_ideal_trace(trace: str, processes: int):
 
 def get_ideal_data(trace: str, processes: int):
     """Returns ideal runtime and useful computation time."""
-    # Creates ideal trace with Dimemas
-    trace_sim = create_ideal_trace(trace, processes)
+    # Checks if simulated trace already exists
+    if os.path.isfile(trace[:-4] + '.sim.h5'):
+        trace_sim = trace[:-4] + '.sim.h5'
+    elif os.path.isfile(trace[:-4] + '.sim.prv'):
+        trace_sim = trace[:-4] + '.sim.prv'
+    else:
+        # Creates ideal trace with Dimemas
+        trace_sim = create_ideal_trace(trace, processes)
+
     if trace_sim:
+        print(f"==INFO== Analysing {trace_sim} ({MOD_FACTORS_VAL['num_processes']} processes, {human_readable(os.path.getsize(trace_sim))})")
         # Parses the just generated .prv file and loads it
         trace_sim = load(trace_sim, prv_parser_args)
 
@@ -478,9 +481,10 @@ def modelfactors(trace_files: List[str], trace_processes: Dict):
     df_mfactors = pd.DataFrame(columns=MOD_FACTORS_DOC.values())
     reference = True
     for (hdf5_file, trace, cpus) in zip(trace_files, traces, trace_processes.values()):
+        if hdf5_file.endswith('.prv'):
+            hdf5_file = hdf5_file[:-4] + '.prv'
         MOD_FACTORS_VAL['num_processes'] = cpus
-        print(
-            f"==INFO== Analysing {hdf5_file} ({MOD_FACTORS_VAL['num_processes']} processes, {human_readable(os.path.getsize(hdf5_file))})")
+        print(f"==INFO== Analysing {hdf5_file} ({MOD_FACTORS_VAL['num_processes']} processes, {human_readable(os.path.getsize(hdf5_file))})")
 
         # Computes raw data
         ipc, freq, runtime, runtime_id, useful_av, useful_max, useful_tot, useful_id, useful_inst, useful_cyc = get_raw_data(
@@ -568,7 +572,6 @@ if __name__ == "__main__":
 
         # Gets info about the traces
         trace_list, trace_processes = get_traces_from_args(cmdl_args, prv_parser_args)
-
         # Analyses traces
         df_mfactors = modelfactors(trace_list, trace_processes)
 
