@@ -767,7 +767,7 @@ int main(int argc, char **argv) {
     // Main function: parses the data and writes it to disk
     parse_prv_to_hdf5(arguments.args[0], arguments.output_file);
 
-    printf("==INFO== The output file is %s\n", arguments.output_file);
+    // printf("==INFO== The output file is %s\n", arguments.output_file);
     
     #ifdef PROFILING
     REGISTER_TIME(&end);

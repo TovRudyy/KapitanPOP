@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import subprocess
 from typing import Dict, List
@@ -8,27 +9,8 @@ import h5py
 import dask.dataframe as dd
 import numpy as np
 
-from src.Trace import TraceMetaData, Trace
+import src.Trace as trace
 
-HDF5_ROOT = "/"
-HDF5_RECORDS = "/RECORDS"
-HDF5_STATES_DF = "STATES"
-HDF5_EVENTS_DF = "EVENTS"
-HDF5_COMMS_DF = "COMMUNICATIONS"
-
-HDF5_METADATA_NAME = "metName"
-HDF5_METADATA_PATH = "metPath"
-HDF5_METADATA_TYPE = "metType"
-HDF5_METADATA_EXEC_TIME = "metTime"
-HDF5_METADATA_DATE = "metDate"
-HDF5_METADATA_NODES = "metNodes"
-HDF5_METADATA_APPS = "metApps"
-HDF5_METADATA_HWCPU = "metHwcpu"
-HDF5_METADATA_HWNODES = "metHwnodes"
-HDF5_METADATA_THREADS = "metThreads"
-
-BIN_UTILS_PATH = "utils/bin"
-PRV_PARSER_BIN = BIN_UTILS_PATH + "prv_parser"
 PARAVER_FILE = "Paraver (.prv)"
 PARAVER_MAGIC_HEADER = "#Paraver"
 
@@ -46,48 +28,32 @@ def try_read_hdf5(hdf5_file, key) -> dd.DataFrame:
         return dd.from_array(np.array([[]]))
 
 
-def load(trace_file: str, args: Dict ={}) -> Trace:
+def load(trace_file: str, args: Dict ={}) -> trace.Trace:
     """Reads the trace file provided. It it is a .prv it will parse it before
     loading it to memory."""
-    if trace_file[-4:] == ".prv":
-        print(f'==INFO== Parsing prv file {trace_file}')
+    if trace_file.endswith('.prv'):
         trace_hdf5_file = file_parser(trace_file, args)
-    elif trace_file[-3:] == ".h5":
+        if not trace_hdf5_file:
+            print(f'Could not completely parse the file.')
+            return ''
+    elif trace_file.endswith('.h5'):
         trace_hdf5_file = trace_file
     else:
-        print(f'==ERROR== File {trace_file} is not valid.')
-        return None
+        print(f'==ERROR== File {trace_file} has not a valid extension.')
+        return ''
 
-    with h5py.File(trace_hdf5_file, "r") as f:
-        metadata = f[HDF5_ROOT]
-        trace_metadata = TraceMetaData(
-            metadata.attrs[HDF5_METADATA_NAME],
-            metadata.attrs[HDF5_METADATA_PATH],
-            metadata.attrs[HDF5_METADATA_TYPE],
-            metadata.attrs[HDF5_METADATA_EXEC_TIME],
-            datetime.strptime(metadata.attrs[HDF5_METADATA_DATE], "%Y-%m-%dT%H:%M:%S"),
-            metadata.attrs[HDF5_METADATA_NODES],
-            json.loads(metadata.attrs[HDF5_METADATA_APPS]),
-            metadata[HDF5_METADATA_HWCPU][:].tolist(),
-            metadata[HDF5_METADATA_HWNODES][:].tolist(),
-            metadata[HDF5_METADATA_THREADS][:].tolist()
-        )
-    df_states = try_read_hdf5(trace_hdf5_file, key=HDF5_RECORDS + "/" + HDF5_STATES_DF)
-    df_events = try_read_hdf5(trace_hdf5_file, key=HDF5_RECORDS + "/" + HDF5_EVENTS_DF)
-    df_comms = try_read_hdf5(trace_hdf5_file, key=HDF5_RECORDS + "/" + HDF5_COMMS_DF)
-    return Trace(trace_metadata, df_states, df_events, df_comms)
+    trace_metadata = trace.TraceMetaData(hdf5_file=trace_hdf5_file)
 
-def get_num_processes(trace_file: str) -> int:
+    df_states = try_read_hdf5(trace_hdf5_file, key=trace.HDF5_RECORDS + "/" + trace.HDF5_STATES_DF)
+    df_events = try_read_hdf5(trace_hdf5_file, key=trace.HDF5_RECORDS + "/" + trace.HDF5_EVENTS_DF)
+    df_comms = try_read_hdf5(trace_hdf5_file, key=trace.HDF5_RECORDS + "/" + trace.HDF5_COMMS_DF)
+
+    return trace.Trace(trace_metadata, df_states, df_events, df_comms)
+
+def get_num_processes(hdf5_file: str) -> int:
     """Returns the number of processes of the trace either by reading its .row file
      or accessing the metadata."""
-    cpus = 0
-    if trace_file.endswith('.prv'):
-        cpus = int(open(f'{trace_file[:-4]}.row').readline().rstrip().rstrip().split(' ')[3])
-    elif trace_file.endswith('.h5'):
-        with h5py.File(trace_file, 'r') as trace:
-            cpus = len(trace[HDF5_ROOT][HDF5_METADATA_HWCPU][:].tolist())
-    else:
-        print(f'==ERROR== File {trace_file} has not valid extension.')
+    cpus = trace.TraceMetaData.get_num_processes(hdf5_file = hdf5_file)
     return cpus
 
 
@@ -122,7 +88,7 @@ def wrapper_prv_parser(file: str, args: Dict) -> str:
         return ''
 
 
-def header_time(header: str) -> int:
+def prv_header_time(header: str) -> int:
     """Returns total execution time (ns) contained in the header."""
     try:
         time_ns, _, other = header[header.find("):") + 2:].partition("_ns")  # Originally it's in ns
@@ -132,34 +98,33 @@ def header_time(header: str) -> int:
         time = 0
     return time
 
-def header_date(header: str) -> datetime:
+def prv_header_date(header: str) -> datetime:
     """Returns the contained date in the header."""
     date, _, other = header.replace("#Paraver (", "").replace("at ", "").partition("):")
     try:
         date = datetime.strptime(date, "%d/%m/%Y %H:%M")
     except ValueError:
         date = datetime.strptime(datetime.today().strftime("%d/%m/%Y %H:%M"), "%d/%m/%Y %H:%M")
-        print(f'==WARNING== Could not parse the date of the header.')
+        print(f"==WARNING== Could not parse header's date.")
     return date
 
 
-def header_nodes(header: str) -> List[int]:
-    """Returns a list telling how many CPUs has each Node.
-    Origin machine's architectural information."""
+def prv_header_nodes(header: str) -> List[int]:
+    """Returns a list telling how many CPUs has each Node."""
+    nodes = []
     try:
         nodes = header[header.find("_ns:") + 4:]
         if nodes[0] == "0":
-            nodes = None
+            nodes = []
         else:
             nodes = nodes[nodes.find("(") + 1: nodes.find(")")]
             nodes = nodes.split(",")
             nodes = list(map(int, nodes))
     except ValueError:
-        nodes = []
-        print('==WARNING== Could not parse the node information of the header')
+        print("==WARNING== Could not parse header's node information.")
     return nodes
 
-def header_apps(header: str) -> List[List[Dict]]:
+def prv_header_apps(header: str) -> List[List[Dict]]:
     """Returns a structure telling the threads/Node mappings of each task."""
     apps_list = []
     try:
@@ -183,97 +148,165 @@ def header_apps(header: str) -> List[List[Dict]]:
             i += 1
             apps, _, other = other.partition(":")
     except ValueError:
-        print("==WARNING== Could not trace app's information of the header")
+        print("==WARNING== Could not trace header's application layout.")
 
     return apps_list
 
-def header_parser(header: str) -> (int, datetime, List[int], List[List[Dict]]):
-    """Parses important fields of the header one by one."""
-    time = header_time(header)
-    date = header_date(header)
-    nodes = header_nodes(header)
-    apps = header_apps(header)
-    return time, date, nodes, apps
+def prv_header_parser(prv_file: str) -> (int, datetime, List[int], List[List[Dict]]):
+    """Parses information from the header of the .prv file.
+    Returns a tuple with the collected information: execution time, date when
+    the trace was generated, node information, application's layout information,
+    number of processes and tasks per node."""
+    # Gets header's line
+    opened_prv_file = open(prv_file, 'r')
+    prv_header = opened_prv_file.readline()
+    opened_prv_file.close()
+
+    time = prv_header_time(prv_header)
+    date = prv_header_date(prv_header)
+    nodes = prv_header_nodes(prv_header)
+    apps = prv_header_apps(prv_header)
+
+    num_processes = 0
+    tasks_per_node = 0
+    if not nodes:
+        num_processes = [num_processes + cpus for cpus in nodes]
+        tasks_per_node = math.ceil(num_processes / len(nodes))
+
+    return time, date, nodes, apps, num_processes, tasks_per_node
 
 
-def row_parser(row_file: str) -> (np.array, np.array, np.array):
-    """Parses the .row file returning a list with the CPUs, nodes and threads names."""
+def row_parser(prv_file: str) -> (List[str], List[str], List[str]):
+    """Guesses the name of the .row file acording prv_file.
+    Parses the .row file returning a list with the CPUs, nodes and threads names."""
+    cpu_list = []
+    node_list = []
+    thread_list = []
+
+    row_file = prv_file[:-4] + '.row'
     try:
-        with open(row_file, "r") as f:
-            lines = f.read().split("\n")
-            gen = (i for i, s in enumerate(lines) if ("LEVEL CPU SIZE" or "LEVEL TASK SIZE") in s)
-            index = next(gen)
-            cpu_size = int(lines[index].split()[3])
-            cpu_list = lines[index + 1: index + cpu_size + 1]
-            # HDF5 for python only supports string in ASCII code
-            cpu_list = [name.encode("ascii", "ignore") for name in cpu_list]
-            gen = (i for i, s in enumerate(lines) if "LEVEL NODE SIZE" in s)
-            index = next(gen)
-            node_size = int(lines[index].split()[3])
-            node_list = lines[index + 1: index + node_size + 1]
-            node_list = [name.encode("ascii", "ignore") for name in node_list]
-            gen = (i for i, s in enumerate(lines) if "LEVEL THREAD SIZE" in s)
-            index = next(gen)
-            thread_size = int(lines[index].split()[3])
-            thread_list = lines[index + 1: index + thread_size + 1]
-            thread_list = [name.encode("ascii", "ignore") for name in thread_list]
-            return cpu_list, node_list, thread_list
+        opened_row_file = open(row_file, 'r')
     except FileNotFoundError:
-        print(f'==WARNING== Could not access the .row file {row_file}')
-        return np.empty(0), np.empty(0), np.empty(0)
+        print(f'==WARNING== Could not open .row file {row_file}')
+        return cpu_list, node_list, thread_list
+
+    lines = opened_row_file.read().split("\n")
+    opened_row_file.close()
+
+    lines_generator = (i for i, s in enumerate(lines) if ("LEVEL CPU SIZE" or "LEVEL TASK SIZE") in s)
+    index = next(lines_generator)
+    cpu_size = int(lines[index].split()[3])
+    cpu_list = lines[index + 1: index + cpu_size + 1]
+    # HDF5 for python only supports string in ASCII code, thus we need to reencode the string
+    cpu_list = [name.encode("ascii", "ignore") for name in cpu_list]
+    lines_generator = (i for i, s in enumerate(lines) if "LEVEL NODE SIZE" in s)
+    index = next(lines_generator)
+    node_size = int(lines[index].split()[3])
+    node_list = lines[index + 1: index + node_size + 1]
+    node_list = [name.encode("ascii", "ignore") for name in node_list]
+    lines_generator = (i for i, s in enumerate(lines) if "LEVEL THREAD SIZE" in s)
+    index = next(lines_generator)
+    thread_size = int(lines[index].split()[3])
+    thread_list = lines[index + 1: index + thread_size + 1]
+    thread_list = [name.encode("ascii", "ignore") for name in thread_list]
+
+    return cpu_list, node_list, thread_list
 
 
-def write_metadata_to_hdf5(hdf5_file: str, trace_metadata: TraceMetaData) -> str:
+def write_metadata_to_hdf5(hdf5_file: str, trace_metadata: trace.TraceMetaData) -> str:
     """Writes into an hdf5 file the metadata contained in the header of the .prv
     file and the data of the .pcf and .row files."""
     try:
-        with h5py.File(hdf5_file, "a") as f:
-            metadata = f[HDF5_ROOT]
-            metadata.attrs[HDF5_METADATA_NAME] = trace_metadata.name
-            metadata.attrs[HDF5_METADATA_PATH] = trace_metadata.path
-            metadata.attrs[HDF5_METADATA_TYPE] = trace_metadata.type
-            metadata.attrs[HDF5_METADATA_EXEC_TIME] = trace_metadata.exec_time
-            metadata.attrs[HDF5_METADATA_DATE] = trace_metadata.date_time.isoformat()
-            metadata.attrs[HDF5_METADATA_NODES] = trace_metadata.nodes
-            metadata.attrs[HDF5_METADATA_APPS] = json.dumps(trace_metadata.apps)
-            metadata.create_dataset(HDF5_METADATA_HWCPU, (len(trace_metadata.cpu_list), 1), 'S25', trace_metadata.cpu_list)
-            metadata.create_dataset(HDF5_METADATA_HWNODES, (len(trace_metadata.node_list), 1), 'S25', trace_metadata.node_list)
-            metadata.create_dataset(HDF5_METADATA_THREADS, (len(trace_metadata.thread_list), 1), 'S25', trace_metadata.thread_list)
-            return hdf5_file
+        opened_hdf5_file = h5py.File(hdf5_file, 'a')
     except FileNotFoundError:
+        print(f'==ERROR== Could not open the HDF5 file {hdf5_file}')
         return ''
 
+    metadata = opened_hdf5_file[trace.HDF5_ROOT]
+    metadata.attrs[trace.HDF5_METADATA_NAME] = trace_metadata.name
+    metadata.attrs[trace.HDF5_METADATA_PATH] = trace_metadata.path
+    metadata.attrs[trace.HDF5_METADATA_TYPE] = trace_metadata.type
+    metadata.attrs[trace.HDF5_METADATA_EXEC_TIME] = trace_metadata.exec_time
+    metadata.attrs[trace.HDF5_METADATA_DATE] = trace_metadata.date_time.isoformat()
+    metadata.attrs[trace.HDF5_METADATA_NODES] = trace_metadata.nodes
+    metadata.attrs[trace.HDF5_METADATA_APPS] = json.dumps(trace_metadata.apps)
+    metadata.attrs[trace.HDF5_METADATA_NUM_PROCESSES] = trace_metadata.num_processes
+    metadata.attrs[trace.HDF5_METADATA_TASKS_PER_NODE] = trace_metadata.tasks_per_node
+    metadata.create_dataset(trace.HDF5_METADATA_HWCPU, (len(trace_metadata.cpu_list), 1), 'S25', trace_metadata.cpu_list)
+    metadata.create_dataset(trace.HDF5_METADATA_HWNODES, (len(trace_metadata.node_list), 1), 'S25', trace_metadata.node_list)
+    metadata.create_dataset(trace.HDF5_METADATA_THREADS, (len(trace_metadata.thread_list), 1), 'S25', trace_metadata.thread_list)
+    opened_hdf5_file.close()
+    return hdf5_file
 
-def file_parser(file: str, args: Dict = {}) -> str:
+
+def is_valid_file(prv_file: str) -> bool:
+    """Checks if the prv_file is accessible and its header
+    looks good."""
+
+    # Checks if the file is accessible
     try:
-        f = open(file, 'r')
+        opened_prv_file = open(prv_file, 'r')
     except FileNotFoundError:
-        print(f'==ERROR== Could not open the file {file}')
-        return ''
+        print(f'==ERROR== Could not open the file {prv_file}')
+        return False
 
-    header= f.readline()
-    if PARAVER_MAGIC_HEADER not in header:
-        print(f'==WARNING== The file {file} is not a valid Paraver trace.')
-        return ''
+    # Checks if file's header contains Paraver's signature
+    prv_header = opened_prv_file.readline()
+    opened_prv_file.close()
 
-    # Parses contents
-    hdf5_file = wrapper_prv_parser(file, args)
+    if PARAVER_MAGIC_HEADER not in prv_header:
+        print(f'==ERROR== The file {prv_file} doesn not contain a valid header.')
+        return False
 
-    # Parses straightforward metadata
-    trace_name = os.path.basename(f.name)
-    trace_path = os.path.abspath(f.name)
+    return True
+
+
+def get_basic_file_info(prv_file: str) -> (str, str, str):
+    """Dumb function that returns very basic information
+    about the trace."""
+    opened_prv_file = open(prv_file, 'r')
+    trace_name = os.path.basename(opened_prv_file.name)
+    trace_path = os.path.abspath(opened_prv_file.name)
     trace_type = PARAVER_FILE
-    # Parses header's metadata
-    trace_exec_time, trace_date, trace_nodes, trace_apps = header_parser(header)
-    # Parses .row's file metadata
-    row_file = file[:-4] + '.row'
-    cpu_list, node_list, thread_list = row_parser(row_file)
-    trace_metadata = TraceMetaData(
-        trace_name, trace_path, trace_type, trace_exec_time, trace_date, trace_nodes, trace_apps, cpu_list,
-        node_list, thread_list
+
+    return trace_name, trace_path, trace_type
+
+
+def file_parser(prv_file: str, args: Dict = {}) -> str:
+    """Responsible to parse Paraver files (.prv, .row and .pcf) and convert
+    them into HDF5 file format. 'args' are the argument to pass to the prv_parser."""
+    # Checks if file is valid
+    if not is_valid_file(prv_file):
+        return ''
+
+    # First we try to parse file's contents and see if it succeeded
+    hdf5_file = wrapper_prv_parser(prv_file, args)
+    # Checks if return is an empty string
+    if not hdf5_file:
+        print(f'==ERROR== Could not parse contents of {prv_file}')
+        return ''
+    # Gets extra data
+    trace_name, trace_path, trace_type = get_basic_file_info(prv_file)
+    # Parses header information of the .prv file
+    trace_exec_time, trace_date, trace_nodes, trace_apps, num_processes, tasks_per_node = prv_header_parser(prv_file)
+    # Checks if it could compute number of processes and tasks per node
+    num_processes_is_ok = (num_processes > 0 and tasks_per_node > 0)
+    # Parses .row's file data
+    cpu_list, node_list, thread_list = row_parser(prv_file)
+    # Recomputes number of processes and tasks per node if it couldn't earlier
+    if not num_processes_is_ok:
+        if cpu_list and node_list:
+            num_processes = len(cpu_list)
+            tasks_per_node = math.ceil(num_processes / len(node_list))
+        else:
+            print(f'==ERROR== Could not compute number of processes and tasks per node.')
+            return ''
+
+    trace_metadata = trace.TraceMetaData(
+        trace_name, trace_path, trace_type, trace_exec_time, trace_date, trace_nodes, trace_apps, num_processes,
+        tasks_per_node, cpu_list, node_list, thread_list
     )
 
     result = write_metadata_to_hdf5(hdf5_file, trace_metadata)
-    f.close()
 
     return result;

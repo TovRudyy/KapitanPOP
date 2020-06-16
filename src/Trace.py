@@ -1,9 +1,30 @@
 from datetime import datetime
 from typing import Dict, List
 from dataclasses import dataclass
+import json
 
 import numpy as np
 import dask.dataframe as dd
+import h5py
+
+HDF5_ROOT = "/"
+HDF5_RECORDS = "/RECORDS"
+HDF5_STATES_DF = "STATES"
+HDF5_EVENTS_DF = "EVENTS"
+HDF5_COMMS_DF = "COMMUNICATIONS"
+
+HDF5_METADATA_NAME = "metName"
+HDF5_METADATA_PATH = "metPath"
+HDF5_METADATA_TYPE = "metType"
+HDF5_METADATA_EXEC_TIME = "metTime"
+HDF5_METADATA_DATE = "metDate"
+HDF5_METADATA_NODES = "metNodes"
+HDF5_METADATA_APPS = "metApps"
+HDF5_METADATA_NUM_PROCESSES = "metNumProcesses"
+HDF5_METADATA_TASKS_PER_NODE = "metTasksPerNode"
+HDF5_METADATA_HWCPU = "metHwcpu"
+HDF5_METADATA_HWNODES = "metHwnodes"
+HDF5_METADATA_THREADS = "metThreads"
 
 @dataclass
 class TraceMetaData:
@@ -19,23 +40,53 @@ class TraceMetaData:
             nodes: List[int] = None,
             # len(Apps) = #Apps | len(Apps[0]) = #Tasks of APP 1 | App[0][0] = {"nTreads": int, "node": int}
             apps: List[List[Dict]] = None,
+            num_processes: int = None,
+            tasks_per_node: int = None,
             cpu_list: np.ndarray = None,
             node_list: np.ndarray = None,
             thread_list: np.ndarray = None,
+            hdf5_file: str = None,
     ):
-        self.name = name
-        self.path = path
-        self.type = trace_type
-        self.exec_time = exec_time
-        self.date_time = date_time
-        self.nodes = nodes[:]
-        self.apps = apps[:]
-        self.cpu_list = cpu_list
-        self.node_list = node_list
-        self.thread_list = thread_list
+        if hdf5_file:
+            try:
+                opened_hdf5_file = h5py.File(hdf5_file, 'r')
+            except:
+                print(f'==ERROR== Could not access to the hdf5_file {hdf5_file}')
+                exit(-1)
+
+            metadata = opened_hdf5_file[HDF5_ROOT]
+            self.name = metadata.attrs[HDF5_METADATA_NAME]
+            self.path = metadata.attrs[HDF5_METADATA_PATH]
+            self.type = metadata.attrs[HDF5_METADATA_TYPE]
+            self.exec_time = metadata.attrs[HDF5_METADATA_EXEC_TIME]
+            self.date_time = datetime.strptime(metadata.attrs[HDF5_METADATA_DATE], "%Y-%m-%dT%H:%M:%S")
+            self.node_list = metadata.attrs[HDF5_METADATA_NODES]
+            self.apps = json.loads(metadata.attrs[HDF5_METADATA_APPS])
+            self.num_processes = metadata.attrs[HDF5_METADATA_NUM_PROCESSES]
+            self.tasks_per_node = metadata.attrs[HDF5_METADATA_TASKS_PER_NODE]
+            self.cpu_list = metadata[HDF5_METADATA_HWCPU][:].tolist(),
+            self.node_list = metadata[HDF5_METADATA_HWNODES][:].tolist(),
+            self.thread_list = metadata[HDF5_METADATA_THREADS][:].tolist()
+
+            opened_hdf5_file.close()
+        else:
+            self.name = name
+            self.path = path
+            self.type = trace_type
+            self.exec_time = exec_time
+            self.date_time = date_time
+            self.nodes = nodes[:]
+            self.apps = apps[:]
+            self.num_processes = num_processes
+            self.tasks_per_node = tasks_per_node
+            self.cpu_list = cpu_list
+            self.node_list = node_list
+            self.thread_list = thread_list
+
 
     def __repr__(self):
         """Returns self's representation as string."""
+        ## DEPRECATED ##
         myself = f"INFORMATION OF OBJECT {type(self)}\n"
         myself += "--------------------\n"
         myself += f"Name: {self.name}\n"
@@ -71,6 +122,19 @@ class TraceMetaData:
 
         myself += "--------------------"
         return myself
+
+    @classmethod
+    def get_num_processes(cls, hdf5_file: str = None):
+        cpus = 0
+
+        if hdf5_file:
+            opened_hdf5_file = h5py.File(hdf5_file, 'r')
+            cpus = opened_hdf5_file[HDF5_ROOT].attrs[HDF5_METADATA_NUM_PROCESSES]
+            opened_hdf5_file.close()
+
+        return cpus
+
+
 
 @dataclass
 class Trace:

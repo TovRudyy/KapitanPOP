@@ -74,34 +74,6 @@ def get_prv_traces_from_args(cmdl_args) -> List[str]:
     return trace_list
 
 
-def get_traces_from_args(cmdl_args, prv_parser_args: Dict = {}) -> Dict:
-    """Filters the given list to extract traces, i.e. matching *.prv & *.h5 and sorts
-     the traces in ascending order based on the number of processes in the trace.
-     Excludes all files other than *.prv & *.h5 and ignores also simulated traces from
-     this script, i.e. *.sim.prv & *.sim.h5
-     Returns list of trace paths and dictionary with the number of processes.
-     """
-    trace_list = [x for x in cmdl_args.trace_list if (fnmatch.fnmatch(x, '*.prv') or fnmatch.fnmatch(x, '*.h5')) if
-                  not (fnmatch.fnmatch(x, '*.sim.prv') or fnmatch.fnmatch(x, '*.sim.h5')) if os.path.exists(x)]
-
-    if not trace_list:
-        print(f'==ERROR== Could not find any traces matching {cmdl_args.trace_list}')
-        sys.exit(1)
-
-    # Removes .prv files if it already has its parsed .h5 file
-    [trace_list.remove(trace) for trace in trace_list if f'{trace[:-4]}.h5' in trace_list]
-    trace_list = sorted(trace_list, key=get_num_processes)
-
-
-    trace_processes = dict()
-
-    for trace in trace_list:
-        trace_processes[trace] = get_num_processes(trace)
-
-    print_overview(trace_list, trace_processes)
-    return trace_list, trace_processes
-
-
 def which(cmd):
     """Returns path to cmd in path or None if not available."""
     for path in os.environ['PATH'].split(os.pathsep):
@@ -168,55 +140,84 @@ def run_command(cmd):
     return return_value
 
 
-def create_ideal_trace(trace: str, processes: int):
+def create_ideal_trace(prv_trace: str, processes: int, tasks_per_node: int):
     """Returns a Dimemas .prv file simulating the execution of trace
     on an ideal network."""
 
-    print(f'==INFO== Simulating ideal execution of {trace}')
+    print(f'==INFO== Simulating ideal execution of {prv_trace}')
 
-    trace_dim = trace[:-4] + '.dim'
-    trace_sim = trace[:-4] + '.sim.prv'
-    cmd = ['prv2dim', trace, trace_dim]
+    trace_dim = prv_trace[:-4] + '.dim'
+    trace_sim = prv_trace[:-4] + '.sim.prv'
+    cmd = ['prv2dim', prv_trace, trace_dim]
     run_command(cmd)
-    if os.path.isfile(trace_dim):
-        None
-    else:
+    if not os.path.isfile(trace_dim):
         print(f'==ERROR== {trace_dim} could not be created.')
-        return None
+        return ''
     # Creates Dimemas configuration
     cfg_dir = os.path.join(os.path.dirname(__file__), 'cfgs')
     content = []
     with open(os.path.join(cfg_dir, 'dimemas_ideal.cfg')) as f:
         content = f.readlines()
-        content = [line.replace('REPLACE_BY_NTASKS', str(processes)) for line in content]
-        content = [line.replace('REPLACE_BY_COLLECTIVES_PATH', os.path.join(cfg_dir, 'dimemas.collectives')) for line in
-                   content]
 
-    with open(trace[:-4] + '.dimemas_ideal.cfg', 'w') as f:
+    content = [line.replace('REPLACE_BY_NTASKS_PER_NODE', str(tasks_per_node)) for line in content]
+    content = [line.replace('REPLACE_BY_NTASKS', str(processes)) for line in content]
+    content = [line.replace('REPLACE_BY_COLLECTIVES_PATH', os.path.join(cfg_dir, 'dimemas.collectives')) for line in content]
+
+    with open(prv_trace[:-4] + '.dimemas_ideal.cfg', 'w') as f:
         f.writelines(content)
-    cmd = ['Dimemas', '-S', '32k', '--dim', trace_dim, '-p', trace_sim, trace[:-4] + '.dimemas_ideal.cfg']
+
+    cmd = ['Dimemas', '-S', '32k', '--dim', trace_dim, '-p', trace_sim, prv_trace[:-4] + '.dimemas_ideal.cfg']
     run_command(cmd)
 
     os.remove(trace_dim)
-    os.remove(trace[:-4] + '.dimemas_ideal.cfg')
+    os.remove(prv_trace[:-4] + '.dimemas_ideal.cfg')
 
     if os.path.isfile(trace_sim):
         return trace_sim
     else:
         print(f'==ERROR== {trace_sim} could not be created.')
-        return None
+        return ''
 
 
-def get_ideal_data(trace: str, processes: int):
-    """Returns ideal runtime and useful computation time."""
-    # Checks if simulated trace already exists
-    if os.path.isfile(trace[:-4] + '.sim.h5'):
-        trace_sim = trace[:-4] + '.sim.h5'
-    elif os.path.isfile(trace[:-4] + '.sim.prv'):
-        trace_sim = trace[:-4] + '.sim.prv'
+def get_ideal_trace(prv_file: str, processes: int, tasks_per_node: int) -> str:
+    # Checks if simulated trace already exists (trace is the name of a Paraver .prv file)
+    # Does the parsed simulated trace already exist?
+    if os.path.isfile(prv_file[:-4] + '.sim.h5'):
+        hdf5_trace_sim = prv_file[:-4] + '.sim.h5'
+        return hdf5_trace_sim
+    # Does the Paraver simulated trace already exist?
+    elif os.path.isfile(prv_file[:-4] + '.sim.prv'):
+        trace_sim = prv_file[:-4] + '.sim.prv'
+        print(f'==INFO== Parsing ideal trace {trace_sim}')
+        hdf5_trace_sim = file_parser(trace_sim, prv_parser_args)
+        if hdf5_trace_sim:
+            print(f'==INFO== Has been generated the file {hdf5_trace_sim} of {human_readable(os.path.getsize(hdf5_trace_sim))}')
+            return hdf5_trace_sim
+        else:
+            print(f'==ERROR== Could not parse ideal trace.')
+            return ''
+    # The ideal trace needs to be created and parsed
     else:
         # Creates ideal trace with Dimemas
-        trace_sim = create_ideal_trace(trace, processes)
+        trace_sim = create_ideal_trace(prv_file, processes, tasks_per_node)
+        if trace_sim:
+            # Parses ideal trace
+            print(f'==INFO== Ideal trace {trace_sim} generated. Parsing it...')
+            hdf5_trace_sim = file_parser(trace_sim, prv_parser_args)
+            if hdf5_trace_sim:
+                print(f'==INFO== Has been generated the file {hdf5_trace_sim} of {human_readable(os.path.getsize(hdf5_trace_sim))}')
+                return hdf5_trace_sim
+            else:
+                print(f'==ERROR== Could not parse ideal trace.')
+                return ''
+
+    print(f'==ERROR== Reached end of get_ideal_trace')
+    sys.exit(-1)
+
+def get_ideal_data(trace: str, processes: int, tasks_per_node: int):
+    """Returns ideal runtime and useful computation time."""
+    # Retrieves the ideal trace in the most efficient way
+    trace_sim = get_ideal_trace(trace, processes, tasks_per_node)
 
     if trace_sim:
         print(f"==INFO== Analysing {trace_sim} ({MOD_FACTORS_VAL['num_processes']} processes, {human_readable(os.path.getsize(trace_sim))})")
@@ -269,15 +270,11 @@ def is_useful(event_group, useful_states):
     return useful_rows
 
 
-def get_raw_data(trace: Trace, cmdl_args):
-    """Analyses the trace and computes raw values."""
-
-    # Computes runtime (in us)
-    runtime = compute_runtime(trace) / 1000
-
+def compute_useful_time(trace: Trace) -> (float, float, float):
     # Retrieves states dataframe with the interesting columns
-    df_state = trace.df_state[[STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.START.value,
-                               STATE_COLS.END.value, STATE_COLS.VAL.value]]
+    df_state = trace.df_state[
+        [STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.START.value,
+         STATE_COLS.END.value, STATE_COLS.VAL.value]]
 
     # Computes elapsed time of each state
     df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
@@ -286,7 +283,8 @@ def get_raw_data(trace: Trace, cmdl_args):
     df_state = df_state.drop(columns=[STATE_COLS.START.value, STATE_COLS.END.value]).compute()
 
     # Filters rows by useful and groups dataframe by process
-    df_state_useful_grouped = df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].groupby([STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])
+    df_state_useful_grouped = df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].groupby(
+        [STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])
     # Computes useful average time (in us)
     useful_av = df_state_useful_grouped['el_time'].sum().mean() / 1000
     # Computes useful max time (in us)
@@ -294,9 +292,20 @@ def get_raw_data(trace: Trace, cmdl_args):
     # Computes useful tot time (in us)
     useful_tot = df_state_useful_grouped['el_time'].sum().sum() / 1000
 
+    return useful_av, useful_max, useful_tot
+
+
+def get_raw_data(trace: Trace, cmdl_args):
+    """Analyses the trace and computes raw values."""
+
+    # Computes runtime (in us)
+    runtime = compute_runtime(trace) / 1000
+    # Computes useful times
+    useful_av, useful_max, useful_tot = compute_useful_time(trace)
+
     # Dimemas simulation for ideal times
     if cmdl_args.dimemas:
-        runtime_id, useful_id = get_ideal_data(trace.metadata.path, len(trace.metadata.cpu_list))
+        runtime_id, useful_id = get_ideal_data(trace.metadata.path, trace.metadata.num_processes, trace.metadata.tasks_per_node)
     else:
         runtime_id = float('NaN')
         useful_id = float('NaN')
@@ -467,7 +476,7 @@ def get_efficiencies(runtime, runtime_id, useful_av, useful_max, useful_id):
     except TypeError:
         transfer_eff = float('NaN')
     try:
-        serial_eff = useful_id / runtime_id * 100
+        serial_eff = comm_eff / transfer_eff * 100
     except TypeError:
         serial_eff = float('NaN')
 
@@ -564,6 +573,57 @@ def print_overview(trace_list: List[str], trace_processes: Dict):
     print('')
 
 
+def filter_traces_from_args(trace_list: List[str]) -> (List[str], List[str]):
+    """Filters the provided files grouping them in two differen valid lists: traces in
+    .prv and traces in .h5 formats"""
+    valid_trace_list = [file for file in trace_list if (fnmatch.fnmatch(file, '*.prv') or fnmatch.fnmatch(file, '*.h5')) if
+                  not (fnmatch.fnmatch(file, '*.sim.prv') or fnmatch.fnmatch(file, '*.sim.h5')) if os.path.exists(file)]
+
+    # Removes .prv files that already have one .h5 file
+    [valid_trace_list.remove(trace) for trace in valid_trace_list if f'{trace[:-4]}.h5' in valid_trace_list]
+
+    prv_traces = [trace for trace in valid_trace_list if trace.endswith('.prv')]
+    hdf5_traces = [trace for trace in valid_trace_list if trace.endswith('.h5')]
+
+    return prv_traces, hdf5_traces
+
+def get_traces_from_args(cmdl_args, prv_parser_args: Dict = {}) -> Dict:
+    """Filters the given list to extract traces, i.e. matching *.prv & *.h5 and sorts
+     the traces in ascending order based on the number of processes in the trace.
+     Excludes all files other than *.prv & *.h5 and ignores also simulated traces from
+     this script, i.e. *.sim.prv & *.sim.h5
+     Returns list of trace paths and dictionary with the number of processes.
+     """
+    prv_list, hdf5_list = filter_traces_from_args(cmdl_args.trace_list)
+
+    parsed_prv = parse_prv_traces(prv_list, prv_parser_args)
+
+    [hdf5_list.append(parsed) for parsed in parsed_prv]
+
+    if not hdf5_list:
+        print(f'==ERROR== Could not find any traces matching {cmdl_args.trace_list}')
+        sys.exit(1)
+
+    trace_processes = dict()
+
+    for hdf5_trace in hdf5_list:
+        trace_processes[hdf5_trace] = get_num_processes(hdf5_trace)
+
+    print_overview(hdf5_list, trace_processes)
+    return hdf5_list, trace_processes
+
+
+def parse_prv_traces(prv_list: List[str], prv_parser_args: Dict) -> List[str]:
+    parsed_traces = []
+    for prv in prv_list:
+        print(f'==INFO== Parsing Paraver file {prv}')
+        result_hdf5 = file_parser(prv, prv_parser_args)
+        if result_hdf5:
+            parsed_traces.append(result_hdf5)
+            print(f'==INFO== Has been generated the file {result_hdf5} of {human_readable(os.path.getsize(result_hdf5))}')
+
+    return parsed_traces
+
 if __name__ == "__main__":
     """Main control flow.
      Currently the script only accepts one parameter, which is a list of traces
@@ -579,10 +639,7 @@ if __name__ == "__main__":
         # Gets only prv traces
         trace_list = get_prv_traces_from_args(cmdl_args)
 
-        for trace in trace_list:
-            result_hdf5 = file_parser(trace, prv_parser_args)
-            if not result_hdf5 == '':
-                print(f'==INFO== Has been generated the file {result_hdf5} of {human_readable(os.path.getsize(result_hdf5))}')
+        parse_prv_traces(trace_list)
 
     else:
         # Checks if Dimemas is in the path
