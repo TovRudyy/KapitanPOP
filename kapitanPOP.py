@@ -11,9 +11,11 @@ import h5py
 import pandas as pd
 import numpy as np
 import dask
-from dask.distributed import Client
+from dask.distributed import Client, client
 import dask.dataframe as dd
 
+from memory_profiler import profile
+import time
 from src.GeneralReader import file_parser, load, get_num_processes
 from src.Trace import Trace
 from src.CONST import MOD_FACTORS_DOC, MOD_FACTORS_VAL, STATE_COLS, STATE_VALUES, EVENT_COLS, EVENT_TYPE, MPI_PTP_VAL
@@ -259,7 +261,9 @@ def is_useful(event_group, useful_states):
     appid, taskid, threadid = event_group.name
     useful_times = useful_states.loc[(useful_states[STATE_COLS.APP.value] == appid) & (useful_states[STATE_COLS.TASK.value] == taskid) & (useful_states[STATE_COLS.THREAD.value] == threadid)][STATE_COLS.END.value].values
     useful_rows = event_group.loc[event_group[EVENT_COLS.TIME.value].isin(useful_times)]
-    return useful_rows
+    sum_useful_rows = useful_rows[EVENT_COLS.EVVAL.value].sum()
+    return sum_useful_rows
+
 
 def compute_useful_time(trace: Trace) -> (float, float, float):
     """Computes useful times (in us) from the trace. Returns useful average, useful max
@@ -292,42 +296,56 @@ def compute_useful_time(trace: Trace) -> (float, float, float):
     return useful_av, useful_max, useful_tot
 
 
-def get_raw_data(trace: Trace, cmdl_args):
-    """Analyses the trace and computes raw values."""
-
-    # Computes runtime (in us)
-    runtime = compute_runtime(trace) / 1000
-    # Computes useful times
-    import timeit
-    useful_av, useful_max, useful_tot = compute_useful_time(trace)
-
-    # Dimemas simulation for ideal times
-    if cmdl_args.dimemas:
-        runtime_id, useful_id = get_ideal_data(trace.metadata.path, trace.metadata.num_processes, trace.metadata.tasks_per_node)
-    else:
-        runtime_id = float('NaN')
-        useful_id = float('NaN')
-
+def compute_useful_events(trace):
 
     # Loads only meaningful columns from df_states and filters useful rows
-    df_state_useful = trace.df_state[[STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.END.value, STATE_COLS.VAL.value]]
-    df_state_useful = df_state_useful.loc[df_state_useful[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].drop(columns=STATE_COLS.VAL.value).compute()
+    state_column_filter = [STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.END.value,
+         STATE_COLS.VAL.value]
+    df_state_useful = trace.df_state[state_column_filter]
+    df_state_useful = df_state_useful.loc[df_state_useful[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].drop(
+        columns=STATE_COLS.VAL.value)
 
     # Loads only meaningful columns from df_events
-    df_event = trace.df_event[[EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value, EVENT_COLS.TIME.value,
-                                   EVENT_COLS.EVTYPE.value, EVENT_COLS.EVVAL.value]]
+    event_column_filter = [EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value, EVENT_COLS.TIME.value,
+         EVENT_COLS.EVTYPE.value, EVENT_COLS.EVVAL.value]
+    df_event = trace.df_event[event_column_filter]
 
-    # Filters for PAPI_TOT_INS and set as index the process identifier
-    df_event_ins = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_INS.value].drop(columns=EVENT_COLS.EVTYPE.value).compute().set_index([EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value])
+    # Filters for PAPI_TOT_INS
+    df_event_ins = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_INS.value].drop(
+        columns=EVENT_COLS.EVTYPE.value)
+
+    # Object that groupby.apply() funtion returns later
+    apply_meta = pd.DataFrame(columns=[EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value, EVENT_COLS.TIME.value, EVENT_COLS.EVVAL.value])
+
+    # Which columns use for groupby
+    groupby_columns =  [EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value]
 
     # Gets total useful instructions by grouping and applying a custom filtering function
-    useful_ins = df_event_ins.groupby([EVENT_COLS.APP.value,EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value]).apply(is_useful, useful_states=df_state_useful)[EVENT_COLS.EVVAL.value].sum()
+    df_event_ins_grouped = df_event_ins.groupby(groupby_columns)
+    df_event_useful_ins = df_event_ins_grouped.apply(is_useful, useful_states=df_state_useful, meta='uint64_t').sum()
+    useful_ins = df_event_useful_ins.compute()
 
-    # Filter for PAPI_TOT_CYC and set as indexes the process identifier
-    df_event_cyc = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_CYC.value].drop(columns=EVENT_COLS.EVTYPE.value).compute().set_index([EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value])
+    # Filter for PAPI_TOT_CYC
+    df_event_cyc = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_CYC.value].drop(
+        columns=EVENT_COLS.EVTYPE.value)
 
     # Gets total useful cycles by grouping and applying a custom filtering function
-    useful_cyc= df_event_cyc.groupby([EVENT_COLS.APP.value,EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value]).apply(is_useful, useful_states=df_state_useful)[EVENT_COLS.EVVAL.value].sum()
+    df_event_cyc_grouped = df_event_cyc.groupby(groupby_columns)
+    df_event_useful_cyc = df_event_cyc_grouped.apply(is_useful, useful_states=df_state_useful, meta='uint64_t').sum()
+    useful_cyc = df_event_useful_cyc.compute()
+
+    return useful_ins, useful_cyc
+
+def get_raw_data(trace: Trace, cmdl_args):
+    """Analyses the trace and computes raw values."""
+    # Computes runtime (in us)
+    runtime = compute_runtime(trace) / 1000
+
+    # Computes useful times
+    useful_av, useful_max, useful_tot = compute_useful_time(trace)
+
+    # Computes useful events data
+    useful_ins, useful_cyc = compute_useful_events(trace)
 
     # Computes  average IPC
     try:
@@ -339,6 +357,13 @@ def get_raw_data(trace: Trace, cmdl_args):
         freq = useful_cyc / useful_tot / 1000
     except ValueError:
         freq = float('NaN')
+
+    # Dimemas simulation for ideal times
+    if cmdl_args.dimemas:
+        runtime_id, useful_id = get_ideal_data(trace.metadata.path, trace.metadata.num_processes, trace.metadata.tasks_per_node)
+    else:
+        runtime_id = float('NaN')
+        useful_id = float('NaN')
 
     return ipc, freq, runtime, runtime_id, useful_av, useful_max, useful_tot, useful_id, useful_ins, useful_cyc
 
