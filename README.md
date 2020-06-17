@@ -110,6 +110,10 @@ You can tune how the parser performs in order to limit the maximum memory and di
 
 **IMPORTANT**: curently the parsed file is between two and three times bigger than the original Paraver file. This is a necessary trade-off for a better memory usage and speeds when analysing the trace. If your computer has limited disk space, you should run KapitanPOP with ```--comp_lvl 1``` (compression level 1). This will notably reduce the size of the file (between 5 and 10 times less), though the parse time will increase in exchange.
 
+If when using KapitanPOP you get an error like this ```unable to lock file, errno = 11, error message = 'Resource temporarily unavailable'```, try exporting the environment variable HDF5_USE_FILE_LOCKING to FALSE before running the too.
+```
+export HDF5_USE_FILE_LOCKING=FALSE
+```
  ## TODO
 
 * Implement a .pcf parser
