@@ -12,6 +12,7 @@ MAINTAINER TovRudyy
     HDF5_HOME=/opt/hdf5-hdf5-1_12_0/install
     DASK_HOME=/opt/dask-2.18.1
     PATH=/opt/KapitanPOP:/opt/KapitanPOP/bin:/opt/dimemas-5.4.2-Linux_x86_64/bin:$PATH
+    HDF5_USE_FILE_LOCKING=FALSE
 
 %post
     # Basic OS packages
