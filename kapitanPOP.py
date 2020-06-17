@@ -14,8 +14,6 @@ import dask
 from dask.distributed import Client, client
 import dask.dataframe as dd
 
-from memory_profiler import profile
-import time
 from src.GeneralReader import file_parser, load, get_num_processes
 from src.Trace import Trace
 from src.CONST import MOD_FACTORS_DOC, MOD_FACTORS_VAL, STATE_COLS, STATE_VALUES, EVENT_COLS, EVENT_TYPE, MPI_PTP_VAL
@@ -322,8 +320,8 @@ def compute_useful_events(trace):
 
     # Gets total useful instructions by grouping and applying a custom filtering function
     df_event_ins_grouped = df_event_ins.groupby(groupby_columns)
-    df_event_useful_ins = df_event_ins_grouped.apply(is_useful, useful_states=df_state_useful, meta='uint64_t').sum()
-    useful_ins = df_event_useful_ins.compute()
+    df_event_useful_ins = df_event_ins_grouped.apply(is_useful, useful_states=df_state_useful, meta='uint64_t')
+    useful_ins = df_event_useful_ins.sum().compute()
 
     # Filter for PAPI_TOT_CYC
     df_event_cyc = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_CYC.value].drop(
@@ -331,8 +329,8 @@ def compute_useful_events(trace):
 
     # Gets total useful cycles by grouping and applying a custom filtering function
     df_event_cyc_grouped = df_event_cyc.groupby(groupby_columns)
-    df_event_useful_cyc = df_event_cyc_grouped.apply(is_useful, useful_states=df_state_useful, meta='uint64_t').sum()
-    useful_cyc = df_event_useful_cyc.compute()
+    df_event_useful_cyc = df_event_cyc_grouped.apply(is_useful, useful_states=df_state_useful, meta='uint64_t')
+    useful_cyc = df_event_useful_cyc.sum().compute()
 
     return useful_ins, useful_cyc
 
@@ -523,31 +521,6 @@ def print_mod_factors_csv(df: pd.DataFrame):
             if columnname == MOD_FACTORS_DOC['freq']:
                 output.write("#\n")
     print(f'==INFO== Modelfactors written into {file_path}')
-
-def _rebalance_ddf(ddf):
-    """Repartition dask dataframe to ensure that partitions are roughly equal size.
-    Assumes `ddf.index` is already sorted."""
-    if not ddf.known_divisions:  # e.g. for read_parquet(..., infer_divisions=False)
-        ddf = ddf.reset_index().set_index(ddf.index.name, sorted=True)
-    index_counts = ddf.map_partitions(lambda _df: _df.index.value_counts().sort_index()).compute()
-    index = np.repeat(index_counts.index, index_counts.values)
-    divisions, _ = dd.io.io.sorted_division_locations(index, npartitions=ddf.npartitions)
-    return ddf.repartition(divisions=divisions)
-
-
-def cull_empty_partitions(df):
-    ll = list(df.map_partitions(len).compute())
-    df_delayed = df.to_delayed()
-    df_delayed_new = list()
-    pempty = None
-    for ix, n in enumerate(ll):
-        if 0 == n:
-            pempty = df.get_partition(ix)
-        else:
-            df_delayed_new.append(df_delayed[ix])
-    if pempty is not None:
-        df = dd.from_delayed(df_delayed_new, meta=pempty)
-    return df
 
 
 def modelfactors(trace_files: List[str], trace_processes: Dict):
