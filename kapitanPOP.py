@@ -11,8 +11,8 @@ import h5py
 import pandas as pd
 import numpy as np
 import dask
+from dask.distributed import Client
 import dask.dataframe as dd
-import dask.array as da
 
 from src.GeneralReader import file_parser, load, get_num_processes
 from src.Trace import Trace
@@ -228,20 +228,11 @@ def get_ideal_data(trace: str, processes: int, tasks_per_node: int):
         df_state = trace_sim.df_state.drop_duplicates()
 
         # Computes runtime (in us)
-        runtime_id = compute_runtime(trace_sim) / 1000
+        runtime_ideal = compute_runtime(trace_sim) / 1000
+        # Computes useful times
+        useful_av_ideal, useful_max_ideal, useful_tot_ideal = compute_useful_time(trace_sim)
 
-        # Computes elapsed time of each state
-        df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
-
-        # Removes start and end columns from rows cause we don't need them. Load the data into memory.
-        df_state = df_state.drop(columns=[STATE_COLS.START.value, STATE_COLS.END.value]).compute()
-
-        # Computes useful ideal max time (in us)
-        useful_id = \
-        df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].groupby([STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])[
-            'el_time'].sum().max() / 1000
-
-        return runtime_id, useful_id
+        return runtime_ideal, useful_max_ideal
 
     else:
         return float('NaN'), float('NaN')
@@ -259,6 +250,7 @@ def get_total_time(events):
     return times.sum()
 
 def compute_runtime(trace: Trace):
+    """Computes runtime (in ns) from the trace."""
     # The runtime can be obtained from the Trace header metadata
     runtime = trace.metadata.exec_time
     return runtime
@@ -269,28 +261,33 @@ def is_useful(event_group, useful_states):
     useful_rows = event_group.loc[event_group[EVENT_COLS.TIME.value].isin(useful_times)]
     return useful_rows
 
-
 def compute_useful_time(trace: Trace) -> (float, float, float):
-    # Retrieves states dataframe with the interesting columns
+    """Computes useful times (in us) from the trace. Returns useful average, useful max
+    and useful total times."""
+
+    # Retrieves states dataframe with the interesting columns. Set the index the TaskID for
+    # better Dask parallelization. Drops duplicated data.
     df_state = trace.df_state[
         [STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.START.value,
-         STATE_COLS.END.value, STATE_COLS.VAL.value]]
+         STATE_COLS.END.value, STATE_COLS.VAL.value]].drop_duplicates()
 
     # Computes elapsed time of each state
     df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
 
-    # Removes start and end columns from rows cause we don't need them. Load the data into memory.
-    df_state = df_state.drop(columns=[STATE_COLS.START.value, STATE_COLS.END.value]).compute()
+    # Removes start and end columns from rows cause we don't need them.
+    df_state = df_state.drop(columns=[STATE_COLS.START.value, STATE_COLS.END.value])
 
-    # Filters rows by useful and groups dataframe by process
-    df_state_useful_grouped = df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].groupby(
-        [STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])
-    # Computes useful average time (in us)
-    useful_av = df_state_useful_grouped['el_time'].sum().mean() / 1000
-    # Computes useful max time (in us)
-    useful_max = df_state_useful_grouped['el_time'].sum().max() / 1000
-    # Computes useful tot time (in us)
-    useful_tot = df_state_useful_grouped['el_time'].sum().sum() / 1000
+    # Only keeps useful states
+    df_state_useful = df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].drop(columns=STATE_COLS.VAL.value)
+    # Groups dataframe by process
+    df_state_useful_grouped = df_state_useful.groupby([STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])
+    # Add rows of grouped data and triggers computation
+    sum = df_state_useful_grouped['el_time'].sum().compute()
+    # Aggregate previous result into total, maximum and average
+    aggregation = sum.agg(['sum', 'max', 'mean']) / 1000
+    useful_tot = aggregation['sum']
+    useful_max = aggregation['max']
+    useful_av = aggregation['mean']
 
     return useful_av, useful_max, useful_tot
 
@@ -301,6 +298,7 @@ def get_raw_data(trace: Trace, cmdl_args):
     # Computes runtime (in us)
     runtime = compute_runtime(trace) / 1000
     # Computes useful times
+    import timeit
     useful_av, useful_max, useful_tot = compute_useful_time(trace)
 
     # Dimemas simulation for ideal times
@@ -501,6 +499,31 @@ def print_mod_factors_csv(df: pd.DataFrame):
                 output.write("#\n")
     print(f'==INFO== Modelfactors written into {file_path}')
 
+def _rebalance_ddf(ddf):
+    """Repartition dask dataframe to ensure that partitions are roughly equal size.
+    Assumes `ddf.index` is already sorted."""
+    if not ddf.known_divisions:  # e.g. for read_parquet(..., infer_divisions=False)
+        ddf = ddf.reset_index().set_index(ddf.index.name, sorted=True)
+    index_counts = ddf.map_partitions(lambda _df: _df.index.value_counts().sort_index()).compute()
+    index = np.repeat(index_counts.index, index_counts.values)
+    divisions, _ = dd.io.io.sorted_division_locations(index, npartitions=ddf.npartitions)
+    return ddf.repartition(divisions=divisions)
+
+
+def cull_empty_partitions(df):
+    ll = list(df.map_partitions(len).compute())
+    df_delayed = df.to_delayed()
+    df_delayed_new = list()
+    pempty = None
+    for ix, n in enumerate(ll):
+        if 0 == n:
+            pempty = df.get_partition(ix)
+        else:
+            df_delayed_new.append(df_delayed[ix])
+    if pempty is not None:
+        df = dd.from_delayed(df_delayed_new, meta=pempty)
+    return df
+
 
 def modelfactors(trace_files: List[str], trace_processes: Dict):
     """ Analyse the provided traces returning a Pandas dataframe with all POP efficiencies"""
@@ -624,6 +647,14 @@ def parse_prv_traces(prv_list: List[str], prv_parser_args: Dict) -> List[str]:
 
     return parsed_traces
 
+
+def init_dask(cmdl_args):
+    """Configures Dask: parallel/distributed runtime, scheduling options."""
+    client = Client(processes=False)
+    if cmdl_args.debug:
+        print(f'==DEBUG== Execution environment information of Dask:\n{client}\n')
+
+
 if __name__ == "__main__":
     """Main control flow.
      Currently the script only accepts one parameter, which is a list of traces
@@ -647,6 +678,8 @@ if __name__ == "__main__":
 
         # Gets info about the traces
         trace_list, trace_processes = get_traces_from_args(cmdl_args, prv_parser_args)
+        # Setup Dask
+        init_dask(cmdl_args)
         # Analyses traces
         df_mfactors = modelfactors(trace_list, trace_processes)
 
