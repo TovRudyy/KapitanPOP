@@ -1,0 +1,280 @@
+% Comments start with a %, and are ignored by LaTeX.
+
+% In LaTeX, every document starts with a documentclass.  I strongly
+% recommend "memoir" over any of the more standard ones.
+\documentclass[article,12pt]{memoir}
+
+% This part of the document is called the preamble.
+
+% Command to use times new roman.  I am not a fan of computer modern,
+% the default font.
+\usepackage{mathptmx}
+
+% Example numbering
+\usepackage{gb4e}
+
+\usepackage{natbib}
+\bibpunct{(}{)}{;}{a}{}{,}
+
+% Math mode
+\usepackage{amsmath}
+
+\begin{document}
+	% Now the body of the document begins.
+	
+	\bibliographystyle{linquiry2}
+	
+	\title{KapitanPOP Manual}
+	\author{Oleksandr Rudyy}
+	
+	\maketitle
+	\chapter{Metrics Computation}
+	This section accurately describes how KapitanPOP computes its metrics from the data contained in the HDF5 trace file. First, it starts with a depiction of how raw metrics are extracted, i.e. \textit{Useful Computation Time}, evolving gradually to the higher level metrics, like \textit{Parallel Efficiency}. Before continuing, though, it is convenient to give a solid definition to some very used terms in order to avoid confusions.
+	
+	\begin{itemize}
+		\item \textbf{Useful}: this adjective refers to any value belonging to the \textit{Running} state defined by Extrae. In other words, \textit{useful} is anything that belongs to user code, or in other words, that is not part of system's -the kernel- or runtime's -OpenMP, pthreads, MPI- code. Input/Output or I/O can also be considered as \textit{useful}, this will depend of how Extrae was configured when tracing.
+		\item \textbf{Maximum}: refers to the maximum existing value when grouping the data by application, process and thread. For example, \textit{Maximum Time in MPI} is the maximum time one process -MPI rank- has spent inside MPI compared to the rest of processes.
+		\item \textbf{Runtime}: is the elapsed time since the start of an application to its end as recorded by Extrae.
+		\item \textbf{Ideal}: this adjective refers to any value that has been computed from a Dimemas trace with ideal network -zero latencies, infinite bandwidth.
+		\item \textbf{Reference}: is used for scalability purposes and refers to the metric coming from the run with less number of cores. 
+	\end{itemize}
+	\subsection{Raw Metrics}
+	\begin{itemize}
+		\item Runtime
+		\item Useful Compute Time
+		\begin{itemize}
+			\item Total Useful Compute Time
+			\item Maximim Useful Compute Time
+			\item Average Useful Compute Time
+		\end{itemize}
+		\item Total Useful Instructions
+		\item Total Useful Cycles
+		\item Ideal Times
+		\begin{itemize}
+			\item Ideal Runtime
+			\item Maximum Ideal Useful Compute Time
+		\end{itemize}
+	\end{itemize}
+	
+	\subsection{Runtime}
+	The \textit{runtime} is extracted from Paraver's header, thus it is already provided and not computed.
+	\subsubsection{Useful Compute Time}
+	The Useful Compute Time is the time the application spends running user code. It is computed from \textit{States} records where state is equal to \textit{Running}.
+	\begin{equation}\label{totustime}
+		\begin{gathered}
+			\text{Total Useful Compute Time} =\\
+			\sum StateRecord_{time\_end} - \sum StateRecord_{time\_start}\\
+			\text{where~$StateRecord_{state} =$ Running}
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{maxustime}
+		\begin{gathered}
+			\text{Max. Useful Compute Time} =\\
+			\max(\sum StateRecord_{time\_end} - \sum StateRecord_{time\_start}),\\
+			\text{where~$StateRecord_{state} =$ Running, groupby(appID, taskID, theadID)}
+		\end{gathered}
+	\end{equation}
+
+	\begin{equation}\label{avustime}
+		\begin{gathered}
+			\text{Average Useful Compute Time} =\\
+			\text{Total Useful Compute Time } / \text{ number of threads}
+		\end{gathered}
+	\end{equation}
+	
+	\subsubsection{Total Useful Instructions}
+	\begin{equation}\label{totusins}
+		\begin{gathered}
+			\text{Total Useful Instructions} =\\
+			\sum EventRecord_{EvValue},\\
+			\big(\text{where~$EventRecord_{EvType} = PAPI\_TOT\_INS$ }\wedge\\
+			EventRecord_{time} = StateRecord_{time\_end}, \text{where~$StateRecord_{state} =$ Running}\big)\\
+			\text{groupby(appID, taskID, theadID)}
+		\end{gathered}
+	\end{equation}
+	
+	\subsubsection{Total Useful Cycles}
+	\begin{equation}\label{totuscyc}
+	\begin{gathered}
+	\text{Total Useful Cycles} =\\
+		\sum EventRecord_{EvValue},\\
+		\big(\text{where~$EventRecord_{EvType} = PAPI\_TOT\_CYC$ }\wedge\\
+		EventRecord_{time} = StateRecord_{time\_end}, \text{where~$StateRecord_{state} =$ Running}\big)\\
+		\text{groupby(appID, taskID, theadID)}
+	\end{gathered}
+	\end{equation}
+	
+	\subsubsection{Ideal Times}
+	\textit{Ideal Runtime} and \textit{Maximum Ideal Useful Compute Time} are computed the same way as \textit{Runtime} and \textit{Maximum Useful Compute Time} with the difference that the data used comes from a Dimemas trace simulating an ideal network.
+	
+	\section{Multiplicative Performance Metrics}
+	\begin{itemize}
+		\item Parallel Performance Metrics
+		\begin{itemize}
+			\item Load Balance
+			\item Communication Efficiency
+			\item Transfer Efficiency
+			\item Serializtion Efficiency
+			\item Parallel Efficiency
+		\end{itemize}
+		\item Global Efficiency
+		\item Scalabilities
+		\begin{itemize}
+			\item IPC Scalability
+			\item Frequency Scalability (GHz)
+			\item Strong
+			\begin{itemize}
+				\item Speedup
+				\item Computation Scalability
+				\item Instruction Scalability
+			\end{itemize}
+			\item Weak
+			\begin{itemize}
+				\item Load Increase Factor (LIF)
+				\item Speedup
+				\item Computation Scalability
+				\item Instruction Scalability
+			\end{itemize}
+		\end{itemize}
+		\item Serial Performance Metrics
+		\begin{itemize}
+			\item Average IPC
+			\item Average Frequency
+		\end{itemize}
+	\end{itemize}
+	
+	\subsection{Parallel Performance Metrics}
+	
+	\begin{equation}\label{loadbalance}
+		\begin{gathered}
+			\text{Load Balance} =\\
+			\text{Average Useful Compute Time } / \text{ Max. Useful Compute Time} * 100
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{commeff}
+		\begin{gathered}
+			\text{Communication Efficiency} =\\
+			\text{Max. Useful Compute Time } / \text{ Runtime} * 100
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{transfeff}
+		\begin{gathered}
+			\text{Transfer Efficiency} =\\
+			\text{Ideal Runtime } / \text{ Runtime} * 100
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{serialeff}
+		\begin{gathered}
+			\text{Serialization Efficiency} =\\
+			\text{Communication Efficiency } / \text{ Transfer Efficiency} * 100
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{pareff}
+		\begin{gathered}
+			\text{Parallel Efficiency} =\\
+			\text{Load Balance} * \text{Communication Efficiency} / 100
+		\end{gathered}
+	\end{equation}
+	
+	\subsection{Global Efficiency}
+	
+	\begin{equation}\label{globeff}
+		\begin{gathered}
+			\text{Global Efficiency} =\\
+			\text{Parallel Efficiency} * \text{Computation Scalability} / 100
+		\end{gathered}
+	\end{equation}
+	
+	\subsection{Scalabilities}	
+	
+	\begin{equation}\label{ipcscala}
+		\begin{gathered}
+			\text{IPC Scalability} =\\
+			\text{Average IPC } / \text{ Reference Average IPC} * 100
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{freqscala}
+		\begin{gathered}
+			\text{Frequency Scalability (GHz)} =\\
+			\text{Average Frequency } / \text{ Reference Average Frequency} * 100
+		\end{gathered}
+	\end{equation}
+	
+	\subsubsection{Strong}
+	
+	\begin{equation}\label{strongspeedup}
+		\begin{gathered}
+			\text{Speedup} =
+			\text{Reference Runtime } / \text{ Runtime}
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{strongcompscala}
+		\begin{gathered}
+			\text{Strong Computation Scalability} =\\
+			\text{Reference Total Useful Compute Time} / \text{Total Useful Compute Time} * 100
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{stronginscala}
+		\begin{gathered}
+			\text{Strong Instruction Scalability} =\\
+			\text{Reference Total Useful Instructions} / \text{ Total Useful Instructions} * 100
+		\end{gathered}
+	\end{equation}
+	
+	\subsubsection{Weak}
+	\textbf{LIF} (Load Increase Factor) is the factor by which the load (amount of work) increases. Ideally, it should be equal to the increase in number of processes/threads.
+	\begin{equation}\label{lif}
+		\begin{gathered}
+			\text{LIF} =\\
+			\text{Number of threads } / \text{ Reference Number of Threads}
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{strongspeedup}
+		\begin{gathered}
+			\text{Speedup} =
+			\text{Reference Runtime } / \text{ Runtime} * LIF
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{weakcompscala}
+		\begin{gathered}
+			\text{Weak Computation Scalability} =\\
+			\text{Reference Total Useful Compute Time } / \text{ Total Useful Compute Time} * LIF * 100
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{weakinscala}
+		\begin{gathered}
+			\text{Weak Instruction Scalability} =\\
+			\text{Reference Total Useful Instructions } / \text{ Total Useful Instructions} * LIF * 100
+		\end{gathered}
+	\end{equation}
+	
+	\subsection{Serial Performance Metrics}
+	
+	\begin{equation}\label{avipc}
+		\begin{gathered}
+			\text{Average IPC} =\\
+			\text{Total Useful Instructions } / \text{ Total Useful Cycles}
+		\end{gathered}
+	\end{equation}
+	
+	\begin{equation}\label{avipc}
+		\begin{gathered}
+			\text{Average Frequency (GHz)} =\\
+			\text{Total Useful Cycles } / \text{ Total Useful Time (ms)} / 1000
+		\end{gathered}
+	\end{equation}
+	
+\end{document}
+
+
