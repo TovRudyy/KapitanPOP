@@ -46,12 +46,12 @@ herr_t status;
 
 char retbuff[MAXBUF];
 
-uint8_t __Verbose = 0;
-long long __ReadSize = DEF_READ_SIZE;
-long long __MaxHDF5ChunkSize = DEF_MAX_HDF5_CHUNK_SIZE;
-long long __MinHDF5ChunkSize = DEF_MIN_HDF5_CHUNK_SIZE;
-unsigned int __ExtendEventCapacity = DEF_EXTEND_EVENT_CAPACITY;
-int __CompressionLevel = DEF_COMPRESSION_LEVEL;
+uint8_t glVerbose = 0;
+long long glReadSize = DEF_READ_SIZE;
+long long glMaxHDF5ChunkSize = DEF_MAX_HDF5_CHUNK_SIZE;
+long long glMinHDF5ChunkSize = DEF_MIN_HDF5_CHUNK_SIZE;
+unsigned int glExtendEventCapcity = DEF_EXTEND_EVENT_CAPACITY;
+int glCompressionLevel = DEF_COMPRESSION_LEVEL;
 
 typedef enum {
     STATE_RECORD    =   1,
@@ -121,18 +121,18 @@ typedef struct comm_row {
 
 /*Column names of the STATES table.*/
 const char *__State_field_names[STATE_RECORD_ELEM] = {"CPUID", "APPID", "TaskID", "ThreadID", "Time_ini", "Time_fi", "State"};
-hid_t __State_field_type[STATE_RECORD_ELEM];
-size_t State_offset[STATE_RECORD_ELEM];
+hid_t glStateFieldType[STATE_RECORD_ELEM];
+size_t glStateOffset[STATE_RECORD_ELEM];
 
 /*Column names of the EVENTS table.*/
 const char *__Event_field_names[EVENT_RECORD_ELEM] = {"CPUID", "APPID", "TaskID", "ThreadID", "Time", "EventType", "EventValue"};
-hid_t __Event_field_type[EVENT_RECORD_ELEM];
-size_t __Event_offset[EVENT_RECORD_ELEM];
+hid_t glEventFieldType[EVENT_RECORD_ELEM];
+size_t glEventOffset[EVENT_RECORD_ELEM];
 
 /*Column names of the COMMUNICATIONS table.*/
 const char *__Comm_field_names[COMM_RECORD_ELEM] = {"CPUSendID", "PhyTaskSendID", "LogTaskSendID", "ThreadSendID", "LogSendTime", "PhySendTime", "CPUReceiveID", "PhyTaskReceiveID", "LogTaskReceiveID", "ThreadReceiveID", "LogReceiveTime", "PhyReceiveTime", "Size", "Tag"};
-hid_t __Comm_field_type[COMM_RECORD_ELEM];
-size_t __Comm_offset[EVENT_RECORD_ELEM];
+hid_t glCommFieldType[COMM_RECORD_ELEM];
+size_t glCommOffset[EVENT_RECORD_ELEM];
 
 /*Checks what kind of records identifies the character.*/
 recordTypes_enum get_record_type(char *line) {
@@ -300,7 +300,7 @@ void data_parser(const file_data *file_d, record_Array *states, record_Array *ev
                 ret = parse_event(&buffer[offset], &events_a[ev_elem]);
                 ev_elem += ret;
                 if ((ev_elem+MIN_EVENT_CAP) >= ev_cap) {   // Checks if capacity of events buffer is enough to hold more rows
-                    ev_cap = ev_cap*__ExtendEventCapacity;
+                    ev_cap = ev_cap*glExtendEventCapcity;
                     (events->capacity) = ev_cap;
                     event_row *replacement = (event_row *)calloc(ev_cap, sizeof(event_row));
                     memcpy(replacement, (events->array), ev_elem*sizeof(event_row));
@@ -443,21 +443,21 @@ void create_HDF5tables(const hid_t loc_id, record_Array state, record_Array even
     #endif
     // Infers ideal table's chunk size
     size_t chunk_state, chunk_event, chunk_comm;
-    if (state.elements > __MaxHDF5ChunkSize) chunk_state = __MaxHDF5ChunkSize;
-    else if (state.elements < __MinHDF5ChunkSize) chunk_state = __MinHDF5ChunkSize;
+    if (state.elements > glMaxHDF5ChunkSize) chunk_state = glMaxHDF5ChunkSize;
+    else if (state.elements < glMinHDF5ChunkSize) chunk_state = glMinHDF5ChunkSize;
     else chunk_state = state.elements;
 
-    if (event.elements > __MaxHDF5ChunkSize) chunk_event = __MaxHDF5ChunkSize;
-    else if (event.elements < __MinHDF5ChunkSize) chunk_event = __MinHDF5ChunkSize;
+    if (event.elements > glMaxHDF5ChunkSize) chunk_event = glMaxHDF5ChunkSize;
+    else if (event.elements < glMinHDF5ChunkSize) chunk_event = glMinHDF5ChunkSize;
     else chunk_event = event.elements;
 
-    if (comm.elements > __MaxHDF5ChunkSize/2) chunk_comm = __MaxHDF5ChunkSize/2;
-    else if (comm.elements < __MinHDF5ChunkSize/2) chunk_comm = __MinHDF5ChunkSize/2;
+    if (comm.elements > glMaxHDF5ChunkSize/2) chunk_comm = glMaxHDF5ChunkSize/2;
+    else if (comm.elements < glMinHDF5ChunkSize/2) chunk_comm = glMinHDF5ChunkSize/2;
     else chunk_comm = comm.elements;
     // Creates tables
-    H5TBmake_table("State records", loc_id, STATE_DATASET_NAME, STATE_RECORD_ELEM, state.elements, sizeof(state_row), __State_field_names, State_offset, __State_field_type, chunk_state, NULL, __CompressionLevel, (state_row *) state.array);
-    H5TBmake_table("Event records", loc_id, EVENT_DATASET_NAME, EVENT_RECORD_ELEM, event.elements, sizeof(event_row), __Event_field_names, __Event_offset, __Event_field_type, chunk_event, NULL, __CompressionLevel, (event_row *) event.array);
-    H5TBmake_table("Communication records", loc_id, COMM_DATASET_NAME, COMM_RECORD_ELEM, comm.elements, sizeof(comm_row), __Comm_field_names, __Comm_offset, __Comm_field_type, chunk_comm, NULL, __CompressionLevel, (comm_row *) comm.array);
+    H5TBmake_table("State records", loc_id, STATE_DATASET_NAME, STATE_RECORD_ELEM, state.elements, sizeof(state_row), __State_field_names, glStateOffset, glStateFieldType, chunk_state, NULL, glCompressionLevel, (state_row *) state.array);
+    H5TBmake_table("Event records", loc_id, EVENT_DATASET_NAME, EVENT_RECORD_ELEM, event.elements, sizeof(event_row), __Event_field_names, glEventOffset, glEventFieldType, chunk_event, NULL, glCompressionLevel, (event_row *) event.array);
+    H5TBmake_table("Communication records", loc_id, COMM_DATASET_NAME, COMM_RECORD_ELEM, comm.elements, sizeof(comm_row), __Comm_field_names, glCommOffset, glCommFieldType, chunk_comm, NULL, glCompressionLevel, (comm_row *) comm.array);
     #ifdef PROFILING
     REGISTER_TIME(&end);
     printf("==PROFILING== El. time creating HDF5T: %.3f sec.\n", GET_ELAPSED_TIME(start, end));
@@ -500,11 +500,11 @@ void extend_HDF5tables(const hid_t loc_id, record_Array state, record_Array even
                                                 sizeof(comm_sample.size), 
                                                 sizeof(comm_sample.tag)};
 
-    H5TBappend_records(loc_id, STATE_DATASET_NAME, state.elements, sizeof(state_row), State_offset, state_field_size, (state_row *) state.array);
+    H5TBappend_records(loc_id, STATE_DATASET_NAME, state.elements, sizeof(state_row), glStateOffset, state_field_size, (state_row *) state.array);
 
-    H5TBappend_records(loc_id, EVENT_DATASET_NAME, event.elements, sizeof(event_row), __Event_offset, event_field_size, (event_row *) event.array);
+    H5TBappend_records(loc_id, EVENT_DATASET_NAME, event.elements, sizeof(event_row), glEventOffset, event_field_size, (event_row *) event.array);
 
-    H5TBappend_records(loc_id, COMM_DATASET_NAME, comm.elements, sizeof(comm_row), __Comm_offset, comm_field_size, (comm_row *) comm.array);
+    H5TBappend_records(loc_id, COMM_DATASET_NAME, comm.elements, sizeof(comm_row), glCommOffset, comm_field_size, (comm_row *) comm.array);
     #ifdef PROFILING
     REGISTER_TIME(&end);
     printf("==PROFILING== El. time to extend HDF5T: %.3f sec.\n", GET_ELAPSED_TIME(start, end));
@@ -522,13 +522,13 @@ void parse_prv_to_hdf5(const char * prv_file, const char * hdf5_file) {
     file_id = create_HDF5(hdf5_file);
     record_group_id = create_HDF5_group(file_id, HDF5_GROUP_NAME);
     // Reads the files in chunks
-    while ( (ret = read_and_preprocess(prv_file, __ReadSize, read_bytes, &file_d)) > 0) {
+    while ( (ret = read_and_preprocess(prv_file, glReadSize, read_bytes, &file_d)) > 0) {
         #ifdef PROFILING
         struct timeval start, end;
         REGISTER_TIME(&start);
         #endif
         
-        if (__Verbose)
+        if (glVerbose)
             printf("==VERBOSE== Read chunk of %.2f MB\n", (float)ret/(1024*1024));
 
         read_bytes += ret;
@@ -555,71 +555,71 @@ void parse_prv_to_hdf5(const char * prv_file, const char * hdf5_file) {
     }
     /*Frees HDF5 data structures.*/
     status = H5Fclose(file_id);
-    if (__Verbose)
+    if (glVerbose)
         printf("==VERBOSE== Total read %.2f MB.\n", (float)read_bytes/(1024*1024)); 
 }
 
 void init() {
     /*Initializes data structures to write an HDF5 file
     using the Table API.*/
-    __State_field_type[0] = H5T_NATIVE_UINT; 
-    __State_field_type[1] = H5T_NATIVE_USHORT; 
-    __State_field_type[2] = H5T_NATIVE_UINT; 
-    __State_field_type[3] = H5T_NATIVE_UINT; 
-    __State_field_type[4] =  H5T_NATIVE_ULLONG; 
-    __State_field_type[5] = H5T_NATIVE_ULLONG; 
-    __State_field_type[6] = H5T_NATIVE_USHORT;
-    State_offset[0] = HOFFSET( state_row, cpu_id );
-    State_offset[1] = HOFFSET( state_row, appl_id );
-    State_offset[2] = HOFFSET( state_row, task_id );
-    State_offset[3] = HOFFSET( state_row, thread_id );
-    State_offset[4] = HOFFSET( state_row, time_ini );
-    State_offset[5] = HOFFSET( state_row, time_fi );
-    State_offset[6] = HOFFSET( state_row, state );
+    glStateFieldType[0] = H5T_NATIVE_UINT;
+    glStateFieldType[1] = H5T_NATIVE_USHORT;
+    glStateFieldType[2] = H5T_NATIVE_UINT;
+    glStateFieldType[3] = H5T_NATIVE_UINT;
+    glStateFieldType[4] =  H5T_NATIVE_ULLONG;
+    glStateFieldType[5] = H5T_NATIVE_ULLONG;
+    glStateFieldType[6] = H5T_NATIVE_USHORT;
+    glStateOffset[0] = HOFFSET( state_row, cpu_id );
+    glStateOffset[1] = HOFFSET( state_row, appl_id );
+    glStateOffset[2] = HOFFSET( state_row, task_id );
+    glStateOffset[3] = HOFFSET( state_row, thread_id );
+    glStateOffset[4] = HOFFSET( state_row, time_ini );
+    glStateOffset[5] = HOFFSET( state_row, time_fi );
+    glStateOffset[6] = HOFFSET( state_row, state );
 
-    __Event_field_type[0] = H5T_NATIVE_UINT;
-    __Event_field_type[1] = H5T_NATIVE_USHORT; 
-    __Event_field_type[2] = H5T_NATIVE_UINT; 
-    __Event_field_type[3] = H5T_NATIVE_UINT; 
-    __Event_field_type[4] = H5T_NATIVE_ULLONG; 
-    __Event_field_type[5] =  H5T_NATIVE_ULLONG; 
-    __Event_field_type[6] = H5T_NATIVE_ULLONG;
-    __Event_offset[0] = HOFFSET( event_row, cpu_id ); 
-    __Event_offset[1] = HOFFSET( event_row, appl_id ); 
-    __Event_offset[2] = HOFFSET( event_row, task_id ); 
-    __Event_offset[3] = HOFFSET( event_row, thread_id ); 
-    __Event_offset[4] = HOFFSET( event_row, time ); 
-    __Event_offset[5] = HOFFSET( event_row, event_t ); 
-    __Event_offset[6] = HOFFSET( event_row, event_v );
+    glEventFieldType[0] = H5T_NATIVE_UINT;
+    glEventFieldType[1] = H5T_NATIVE_USHORT;
+    glEventFieldType[2] = H5T_NATIVE_UINT;
+    glEventFieldType[3] = H5T_NATIVE_UINT;
+    glEventFieldType[4] = H5T_NATIVE_ULLONG;
+    glEventFieldType[5] =  H5T_NATIVE_ULLONG;
+    glEventFieldType[6] = H5T_NATIVE_ULLONG;
+    glEventOffset[0] = HOFFSET( event_row, cpu_id );
+    glEventOffset[1] = HOFFSET( event_row, appl_id );
+    glEventOffset[2] = HOFFSET( event_row, task_id );
+    glEventOffset[3] = HOFFSET( event_row, thread_id );
+    glEventOffset[4] = HOFFSET( event_row, time );
+    glEventOffset[5] = HOFFSET( event_row, event_t );
+    glEventOffset[6] = HOFFSET( event_row, event_v );
 
-    __Comm_field_type[0] = H5T_NATIVE_UINT;
-    __Comm_field_type[1] = H5T_NATIVE_UINT; 
-    __Comm_field_type[2] = H5T_NATIVE_UINT; 
-    __Comm_field_type[3] = H5T_NATIVE_UINT; 
-    __Comm_field_type[4] = H5T_NATIVE_ULLONG; 
-    __Comm_field_type[5] = H5T_NATIVE_ULLONG; 
-    __Comm_field_type[6] = H5T_NATIVE_UINT; 
-    __Comm_field_type[7] = H5T_NATIVE_UINT; 
-    __Comm_field_type[8] = H5T_NATIVE_UINT; 
-    __Comm_field_type[9] = H5T_NATIVE_UINT; 
-    __Comm_field_type[10] = H5T_NATIVE_ULLONG; 
-    __Comm_field_type[11] = H5T_NATIVE_ULLONG; 
-    __Comm_field_type[12] = H5T_NATIVE_ULLONG; 
-    __Comm_field_type[13] = H5T_NATIVE_ULLONG;
-    __Comm_offset[0] = HOFFSET( comm_row, cpu_send_id );
-    __Comm_offset[1] = HOFFSET( comm_row, ptask_send_id );
-    __Comm_offset[2] = HOFFSET( comm_row, task_send_id );
-    __Comm_offset[3] = HOFFSET( comm_row, thread_send_id );
-    __Comm_offset[4] = HOFFSET( comm_row, lsend );
-    __Comm_offset[5] = HOFFSET( comm_row, psend );
-    __Comm_offset[6] = HOFFSET( comm_row, cpu_recv_id );
-    __Comm_offset[7] = HOFFSET( comm_row, ptask_recv_id );
-    __Comm_offset[8] = HOFFSET( comm_row, task_recv_id );
-    __Comm_offset[9] = HOFFSET( comm_row, thread_recv_id );
-    __Comm_offset[10] = HOFFSET( comm_row, lrecv );
-    __Comm_offset[11] = HOFFSET( comm_row, precv );
-    __Comm_offset[12] = HOFFSET( comm_row, size );
-    __Comm_offset[13] = HOFFSET( comm_row, tag );
+    glCommFieldType[0] = H5T_NATIVE_UINT;
+    glCommFieldType[1] = H5T_NATIVE_UINT;
+    glCommFieldType[2] = H5T_NATIVE_UINT;
+    glCommFieldType[3] = H5T_NATIVE_UINT;
+    glCommFieldType[4] = H5T_NATIVE_ULLONG;
+    glCommFieldType[5] = H5T_NATIVE_ULLONG;
+    glCommFieldType[6] = H5T_NATIVE_UINT;
+    glCommFieldType[7] = H5T_NATIVE_UINT;
+    glCommFieldType[8] = H5T_NATIVE_UINT;
+    glCommFieldType[9] = H5T_NATIVE_UINT;
+    glCommFieldType[10] = H5T_NATIVE_ULLONG;
+    glCommFieldType[11] = H5T_NATIVE_ULLONG;
+    glCommFieldType[12] = H5T_NATIVE_ULLONG;
+    glCommFieldType[13] = H5T_NATIVE_ULLONG;
+    glCommOffset[0] = HOFFSET( comm_row, cpu_send_id );
+    glCommOffset[1] = HOFFSET( comm_row, ptask_send_id );
+    glCommOffset[2] = HOFFSET( comm_row, task_send_id );
+    glCommOffset[3] = HOFFSET( comm_row, thread_send_id );
+    glCommOffset[4] = HOFFSET( comm_row, lsend );
+    glCommOffset[5] = HOFFSET( comm_row, psend );
+    glCommOffset[6] = HOFFSET( comm_row, cpu_recv_id );
+    glCommOffset[7] = HOFFSET( comm_row, ptask_recv_id );
+    glCommOffset[8] = HOFFSET( comm_row, task_recv_id );
+    glCommOffset[9] = HOFFSET( comm_row, thread_recv_id );
+    glCommOffset[10] = HOFFSET( comm_row, lrecv );
+    glCommOffset[11] = HOFFSET( comm_row, precv );
+    glCommOffset[12] = HOFFSET( comm_row, size );
+    glCommOffset[13] = HOFFSET( comm_row, tag );
 }
 
 //const char *argp_program_version = "uberparser 0.0.1";
@@ -647,7 +647,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     struct arguments *arguments = state->input;
     switch(key) {
         case 'v':
-            __Verbose = TRUE;
+            glVerbose = TRUE;
             break;
 
         case 'o': ;
@@ -668,7 +668,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 printf("==ERROR== Bad option value: chunk_size must be a positive integer.\n");
                 exit(EXIT_FAILURE);
             }
-            __ReadSize = chunk*1024*1024;
+            glReadSize = chunk*1024*1024;
             break;
 
         case 'c': ;
@@ -677,7 +677,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 printf("==ERROR== Bad option value: comp_lvl must be an integer between 0 and 9.\n");
                 exit(EXIT_FAILURE);
             }
-            __CompressionLevel = level;
+            glCompressionLevel = level;
             break;
 
         case 500: ;
@@ -686,7 +686,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 printf("==ERROR== Bad option value: max_hdf5_chunk_size must be a positive integer.\n");
                 exit(EXIT_FAILURE);
             }
-            __MaxHDF5ChunkSize = size_max;
+            glMaxHDF5ChunkSize = size_max;
             break;
 
         case 501: ;
@@ -695,7 +695,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 printf("==ERROR== Bad option value: min_hdf5_chunk_size must be a positive integer.\n");
                 exit(EXIT_FAILURE);
             }
-            __MinHDF5ChunkSize = size_min;
+            glMinHDF5ChunkSize = size_min;
             break;
 
         case 510: ;
@@ -704,7 +704,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 printf("==ERROR== Bad option value: event_capacity_factor must be a positive integer.\n");
                 exit(EXIT_FAILURE);
             }
-            __ExtendEventCapacity = factor;
+            glExtendEventCapcity = factor;
             break;
 
         case ARGP_KEY_INIT:
@@ -741,11 +741,11 @@ static struct argp argp = {options, parse_opt, args_doc, doc};
 void print_exec_environment(struct arguments arguments) {
     printf("==VERBOSE== Trace: %s\n", arguments.args[0]);
     printf("==VERBOSE== Output file: %s\n", arguments.output_file);
-    printf("==VERBOSE== Chunk size: %.2f MB\n", __ReadSize / (1024.0*1024.0));
-    printf("==VERBOSE== Compression level: %d\n", __CompressionLevel);
-    printf("==VERBOSE== Max. HDF5 chunk size: %lld elements\n", __MaxHDF5ChunkSize);
-    printf("==VERBOSE== Min. HDF5 chunk size: %lld elements\n", __MinHDF5ChunkSize);
-    printf("==VERBOSE== Event capacity extend factor: %d\n", __ExtendEventCapacity);
+    printf("==VERBOSE== Chunk size: %.2f MB\n", glReadSize / (1024.0*1024.0));
+    printf("==VERBOSE== Compression level: %d\n", glCompressionLevel);
+    printf("==VERBOSE== Max. HDF5 chunk size: %lld elements\n", glMaxHDF5ChunkSize);
+    printf("==VERBOSE== Min. HDF5 chunk size: %lld elements\n", glMinHDF5ChunkSize);
+    printf("==VERBOSE== Event capacity extend factor: %d\n", glExtendEventCapcity);
 }
 
 int main(int argc, char **argv) {
@@ -758,7 +758,7 @@ int main(int argc, char **argv) {
     // Argument's parsing
     struct arguments arguments;
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
-    if (__Verbose)
+    if (glVerbose)
         print_exec_environment(arguments);
 
     // Initialization of some necessary data
