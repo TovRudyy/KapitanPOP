@@ -272,7 +272,6 @@ def compute_useful_time(trace: Trace) -> (float, float, float):
     df_state = trace.df_state[
         [STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.START.value,
          STATE_COLS.END.value, STATE_COLS.VAL.value]].drop_duplicates()
-
     # Computes elapsed time of each state
     df_state['el_time'] = df_state[STATE_COLS.END.value] - df_state[STATE_COLS.START.value]
 
@@ -281,6 +280,7 @@ def compute_useful_time(trace: Trace) -> (float, float, float):
 
     # Only keeps useful states
     df_state_useful = df_state.loc[df_state[STATE_COLS.VAL.value] == STATE_VALUES.RUNNING.value].drop(columns=STATE_COLS.VAL.value)
+
     # Groups dataframe by process
     df_state_useful_grouped = df_state_useful.groupby([STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value])
     # Add rows of grouped data and triggers computation
@@ -295,6 +295,8 @@ def compute_useful_time(trace: Trace) -> (float, float, float):
 
 
 def compute_useful_events(trace):
+    # To remove duplicate rows later
+    duplicate_subset = [EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value, EVENT_COLS.TIME.value]
 
     # Loads only meaningful columns from df_states and filters useful rows
     state_column_filter = [STATE_COLS.APP.value, STATE_COLS.TASK.value, STATE_COLS.THREAD.value, STATE_COLS.END.value,
@@ -309,12 +311,12 @@ def compute_useful_events(trace):
     df_event = trace.df_event[event_column_filter]
 
     # Filters for PAPI_TOT_INS
-    df_event_ins = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_INS.value].drop(
+    df_event_ins = df_event.loc[(df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_INS.value)].drop(
         columns=EVENT_COLS.EVTYPE.value)
-
+    # Somehow, some rows are duplicated and we need to keep only the first
+    df_event_ins = df_event_ins.drop_duplicates(subset=duplicate_subset, keep='first')
     # Object that groupby.apply() funtion returns later
     apply_meta = pd.DataFrame(columns=[EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value, EVENT_COLS.TIME.value, EVENT_COLS.EVVAL.value])
-
     # Which columns use for groupby
     groupby_columns =  [EVENT_COLS.APP.value, EVENT_COLS.TASK.value, EVENT_COLS.THREAD.value]
 
@@ -324,9 +326,9 @@ def compute_useful_events(trace):
     useful_ins = df_event_useful_ins.sum().compute()
 
     # Filter for PAPI_TOT_CYC
-    df_event_cyc = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_CYC.value].drop(
-        columns=EVENT_COLS.EVTYPE.value)
-
+    df_event_cyc = df_event.loc[df_event[EVENT_COLS.EVTYPE.value] == EVENT_TYPE.PAPI_TOT_CYC.value].drop(columns=EVENT_COLS.EVTYPE.value)
+    # Somehow, some rows are duplicated and we need to keep only the first
+    df_event_cyc = df_event_cyc.drop_duplicates(subset=duplicate_subset, keep='first')
     # Gets total useful cycles by grouping and applying a custom filtering function
     df_event_cyc_grouped = df_event_cyc.groupby(groupby_columns)
     df_event_useful_cyc = df_event_cyc_grouped.apply(is_useful, useful_states=df_state_useful, meta='uint64_t')
@@ -668,7 +670,7 @@ if __name__ == "__main__":
         # Gets only prv traces
         trace_list = get_prv_traces_from_args(cmdl_args)
 
-        parse_prv_traces(trace_list)
+        parse_prv_traces(trace_list, prv_parser_args)
 
     else:
         # Checks if Dimemas is in the path
